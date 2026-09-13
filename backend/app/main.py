@@ -35,6 +35,9 @@ from .domain import sm2, next_task_date, normalize_body, calendar_occurrences
 from .backup import coerce, export_data, archive, parse_backup, restore, dumps
 
 app = FastAPI(title="Life OS", version="1.0.0")
+from .transfers import router as transfer_router
+
+app.include_router(transfer_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(","),
@@ -175,6 +178,7 @@ def get_table(name, write=False):
         "sessions",
         "secrets",
         "auth_attempts",
+        "backup_transfers",
     }:
         raise HTTPException(404, "Table is not available")
     if write and name in s.SYSTEM:
@@ -186,7 +190,13 @@ def get_table(name, write=False):
 def schema():
     result = {}
     for name, t in s.TABLES.items():
-        if name in {"owners", "sessions", "secrets", "auth_attempts"}:
+        if name in {
+            "owners",
+            "sessions",
+            "secrets",
+            "auth_attempts",
+            "backup_transfers",
+        }:
             continue
         fields = []
         for c in t.c:

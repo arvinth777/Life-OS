@@ -22,6 +22,7 @@ import {
   Trend,
 } from "./components";
 import Preferences from "./preferences";
+import { downloadBackup, restoreBackup } from "./backup";
 export function Journal(p: any) {
   const [entries, setEntries] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<any[]>([]);
@@ -637,13 +638,7 @@ export function SettingsPage(p: any) {
   async function download() {
     setBusy(true);
     try {
-      const r = await fetch(base + "/api/backup", {
-        headers: {
-          Authorization: "Bearer " + sessionStorage.getItem("life-os-token"),
-        },
-      });
-      if (!r.ok) throw new Error("Could not export backup");
-      const u = URL.createObjectURL(await r.blob());
+      const u = URL.createObjectURL(await downloadBackup());
       const a = document.createElement("a");
       a.href = u;
       a.download = "life-os-backup.zip";
@@ -665,16 +660,7 @@ export function SettingsPage(p: any) {
       return;
     setBusy(true);
     try {
-      const r = await fetch(base + "/api/restore?replace=true", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + sessionStorage.getItem("life-os-token"),
-          "Content-Type": "application/octet-stream",
-        },
-        body: file,
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.detail);
+      await restoreBackup(file);
       sessionStorage.removeItem("life-os-token");
       window.dispatchEvent(new Event("signed-out"));
     } catch (e) {

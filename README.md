@@ -4,6 +4,8 @@ A single-owner personal workspace: Today, Journal, Personal growth, Academics, W
 
 Read [PLAN.md](PLAN.md) for the schema, design and risk register; [STATUS.md](docs/STATUS.md) for the exact implemented/deferred/tested boundary; [PHONE_SETUP.md](docs/PHONE_SETUP.md) for the phone bridge; and [INTEGRATIONS.md](docs/INTEGRATIONS.md) for integration contracts.
 
+The selected hosting path is now **Vercel Hobby + Neon Free**, with the frontend on Sites. See [Vercel setup](docs/VERCEL.md) for exact deployment steps and backup transfer limits. The Render instructions below remain an alternative.
+
 ## What you need
 
 - Python **3.13** (the pinned wheels were verified on 3.13; do not use 3.14 for this lock).

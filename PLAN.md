@@ -141,3 +141,10 @@ Phase 2 scaffolding reserves one configured Google calendar, encrypted refresh c
 | Malformed backup / old schema | Restore fails | Versioned strict validation and atomic rollback; migrate compatible version before restore. |
 
 Sources checked: [Render free services](https://render.com/docs/free), [Neon pricing](https://neon.com/pricing), [Google incremental sync](https://developers.google.com/workspace/calendar/api/guides/sync), [Google push notifications](https://developers.google.com/workspace/calendar/api/guides/push). Free tiers and availability can change; no paid service is activated by this repository.
+# Hosting update — Vercel Hobby
+
+The Python API is prepared for Vercel Hobby; the React frontend stays on Sites and the data stays in Neon Free. This changes deployment configuration, not module contracts. See `docs/VERCEL.md` for setup, limits and verification.
+
+Migration `0002` adds the `backup_transfers` table with UUID primary key; owner foreign key with cascading deletion; direction constrained to upload/download; size constrained to 1–25,000,000 bytes; SHA-256 checksum; encrypted JSON chunk map; creation/update/expiry timestamps; and indexes on owner and timestamps. It is included in the full CSV/JSON backup schema and accessed only through owner-authenticated transfer endpoints. One active transfer is permitted at a time. The download captures every table before creating its own transport row. Chunk size is 1 MB. Abandoned transfers expire after one hour and are removed on the next transfer request. Restore validates the assembled archive and applies it in one transaction. Revision 0001 archives remain compatible.
+
+Additional dependency risk: Vercel enforces payload, execution-time and monthly usage limits. Small chunk requests address the payload limit, while bounded synchronous actions retain the existing request-driven architecture. Free-limit exhaustion can pause service; the documented Render alternative and local setup remain available. No paid plan, persistent worker or additional storage provider is introduced.

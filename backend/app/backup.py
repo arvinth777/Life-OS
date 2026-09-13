@@ -41,8 +41,9 @@ def coerce(table, row):
     return result
 
 
-def export_data(conn):
-    conn.exec_driver_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+def export_data(conn, set_isolation=True):
+    if set_isolation:
+        conn.exec_driver_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
     data = {
         t.name: [dict(r) for r in conn.execute(sa.select(t)).mappings()]
         for t in metadata.sorted_tables
@@ -54,7 +55,7 @@ def export_data(conn):
             ).scalar_one()
         }
     ]
-    return {"format": "life-os-backup", "version": 1, "schema": "0001", "tables": data}
+    return {"format": "life-os-backup", "version": 1, "schema": "0002", "tables": data}
 
 
 def archive(data):
@@ -85,7 +86,10 @@ def parse_backup(raw):
                 return json.loads(z.read("life-os.json"))
             manifest = json.loads(z.read("manifest.json"))
             manifest["tables"] = {}
-            for name in [*TABLES, "alembic_version"]:
+            names = [*TABLES, "alembic_version"]
+            if manifest.get("schema") == "0001":
+                names.remove("backup_transfers")
+            for name in names:
                 reader = csv.DictReader(
                     io.StringIO(z.read("csv/" + name + ".csv").decode())
                 )
@@ -97,10 +101,24 @@ def parse_backup(raw):
 
 
 def restore(conn, data, replace=False):
+    # Backups from before transport chunking remain restorable after migration.
+    if isinstance(data, dict) and data.get("schema") == "0001":
+        import copy
+
+        data = copy.deepcopy(data)
+        if data.get("tables", {}).get("alembic_version") != [{"version_num": "0001"}]:
+            raise ValueError("Migration revision does not match")
+        if set(data.get("tables", {})) != (set(TABLES) - {"backup_transfers"}) | {
+            "alembic_version"
+        }:
+            raise ValueError("Backup must include every table")
+        data["schema"] = "0002"
+        data["tables"]["backup_transfers"] = []
+        data["tables"]["alembic_version"] = [{"version_num": "0002"}]
     if (
         not isinstance(data, dict)
         or data.get("format") != "life-os-backup"
-        or data.get("schema") != "0001"
+        or data.get("schema") != "0002"
         or data.get("version") != 1
     ):
         raise ValueError("Unsupported backup format or schema version")
@@ -108,7 +126,7 @@ def restore(conn, data, replace=False):
         raise ValueError("Backup tables are missing")
     if set(data["tables"]) != {*TABLES, "alembic_version"}:
         raise ValueError("Backup must include every table")
-    if data["tables"]["alembic_version"] != [{"version_num": "0001"}]:
+    if data["tables"]["alembic_version"] != [{"version_num": "0002"}]:
         raise ValueError("Migration revision does not match")
     for t in metadata.sorted_tables:
         if not isinstance(data["tables"][t.name], list):

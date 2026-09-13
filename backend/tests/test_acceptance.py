@@ -1,6 +1,7 @@
 """Acceptance checks require a disposable real PostgreSQL database (never production)."""
 
 import io, json, os, uuid, zipfile
+import base64, hashlib
 from datetime import datetime, date, timedelta, timezone
 import pytest
 import sqlalchemy as sa
@@ -53,6 +54,111 @@ def create(c, table_name, **data):
     r = c.post("/api/data/" + table_name, json=data)
     assert r.status_code == 200, r.text
     return r.json()
+
+
+def test_large_chunked_backup_restore_and_legacy_compatibility(client):
+    # Incompressible content makes the ZIP exceed the host's 4.5 MB payload cap.
+    body = base64.b64encode(os.urandom(1_700_000)).decode()
+    with engine.begin() as conn:
+        entry_id = conn.execute(
+            sa.insert(s.journal_entries)
+            .values(title="Large backup", body=body)
+            .returning(s.journal_entries.c.id)
+        ).scalar_one()
+    response = client.post("/api/transfers/download")
+    assert response.status_code == 200, response.text
+    transfer = response.json()
+    assert transfer["size"] > 4_500_000
+    assert client.post("/api/transfers/download").status_code == 409
+    pieces = []
+    engine.dispose()  # no process-local state may be needed to resume
+    for i in range(transfer["count"]):
+        r = client.get(f'/api/transfers/{transfer["id"]}/chunks/{i}')
+        assert r.status_code == 200 and len(r.content) <= 1_000_000
+        pieces.append(r.content)
+    raw = b"".join(pieces)
+    assert hashlib.sha256(raw).hexdigest() == transfer["sha256"]
+    data = parse_backup(raw)
+    assert set(data["tables"]) == {*s.TABLES, "alembic_version"}
+    assert data["tables"]["backup_transfers"] == []
+    assert client.delete(f'/api/transfers/{transfer["id"]}').status_code == 200
+    with engine.begin() as conn:
+        conn.execute(
+            sa.update(s.journal_entries)
+            .where(s.journal_entries.c.id == entry_id)
+            .values(body="After snapshot")
+        )
+    upload = client.post(
+        "/api/transfers/upload",
+        json={"size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()},
+    ).json()
+    path = f'/api/transfers/{upload["id"]}'
+    assert client.post(path + "/restore?replace=true").status_code == 422
+    with engine.connect() as conn:
+        assert (
+            conn.execute(
+                sa.select(s.journal_entries.c.body).where(
+                    s.journal_entries.c.id == entry_id
+                )
+            ).scalar_one()
+            == "After snapshot"
+        )
+    for i, part in enumerate(pieces):
+        assert client.post(path + f"/chunks/{i}", content=part).status_code == 200
+    assert client.post(path + "/chunks/0", content=pieces[0]).status_code == 200
+    assert (
+        client.post(path + "/chunks/0", content=b"x" * len(pieces[0])).status_code
+        == 409
+    )
+    engine.dispose()
+    assert client.post(path + "/restore?replace=true").status_code == 200
+    with engine.connect() as conn:
+        assert (
+            conn.execute(
+                sa.select(s.journal_entries.c.body).where(
+                    s.journal_entries.c.id == entry_id
+                )
+            ).scalar_one()
+            == body
+        )
+        assert (
+            conn.execute(
+                sa.select(sa.func.count()).select_from(s.backup_transfers)
+            ).scalar()
+            == 0
+        )
+    legacy = dict(
+        data,
+        schema="0001",
+        tables={k: v for k, v in data["tables"].items() if k != "backup_transfers"},
+    )
+    legacy["tables"]["alembic_version"] = [{"version_num": "0001"}]
+    with engine.begin() as conn:
+        restore(conn, legacy, replace=True)
+    with engine.connect() as conn:
+        assert (
+            conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+            == "0002"
+        )
+
+
+def test_transfer_access_expiry_and_checksum(client):
+    assert TestClient(app).post("/api/transfers/download").status_code == 401
+    assert client.get("/api/data/backup_transfers").status_code == 404
+    r = client.post("/api/transfers/upload", json={"size": 3, "sha256": "0" * 64})
+    key = r.json()["id"]
+    assert (
+        client.post(f"/api/transfers/{key}/chunks/0", content=b"bad").status_code == 200
+    )
+    assert client.post(f"/api/transfers/{key}/restore?replace=true").status_code == 422
+    with engine.begin() as conn:
+        conn.execute(
+            sa.update(s.backup_transfers).values(
+                expires_at=s.now() - timedelta(seconds=1)
+            )
+        )
+    assert client.get(f"/api/transfers/{key}/chunks/0").status_code == 404
+    assert client.post("/api/transfers/download").status_code == 200
 
 
 def test_every_module_persists_after_connection_restart(client):

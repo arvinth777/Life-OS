@@ -91,6 +91,17 @@ sessions = table(
     time("expires_at"),
 )
 settings = table("settings", text("key", unique=True), json("value"))
+backup_transfers = table(
+    "backup_transfers",
+    fk("owner_id", "owners", delete="CASCADE"),
+    text("direction"),
+    integer("size"),
+    text("sha256"),
+    json("chunks"),
+    time("expires_at"),
+    check("direction IN ('download', 'upload')"),
+    check("size > 0 AND size <= 25000000"),
+)
 secrets = table("secrets", text("name", unique=True), text("ciphertext"))
 journal_entries = table(
     "journal_entries", text("title"), text("body"), json("tags", list)
