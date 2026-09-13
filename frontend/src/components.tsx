@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Plus, X, Trash2, Pencil, Check, ArrowRight } from "lucide-react";
 import { api, title, fmt, localInput } from "./api";
+import { recordFeedback } from "./feedback";
 export function Empty({
   text = "Nothing here yet.",
   action,
@@ -172,6 +173,7 @@ export function Editor({
         row ? "PATCH" : "POST",
         payload,
       );
+      recordFeedback(table, !!row);
       onSaved();
       onClose();
     } catch (e) {
@@ -503,6 +505,7 @@ export function Tabs({ items, active, onChange }: any) {
         <button
           key={x[0]}
           className={active === x[0] ? "active" : ""}
+          aria-pressed={active === x[0]}
           onClick={() => onChange(x[0])}
         >
           {x[1]}
@@ -525,10 +528,11 @@ export function Trend({ values, label, min = 0, max }: any) {
     <div className="trend">
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
         <path d="M20 10V130H580" className="chart-axis" />
-        <polyline points={points} className="chart-line" />
+        <polyline key={points} points={points} className="chart-line chart-reveal" />
         {values.map((n: number, i: number) => (
           <circle
-            key={i}
+            key={`${i}-${n}`}
+            style={{ animationDelay: `${Math.min(i * 45, 300)}ms` }}
             cx={20 + (i * (width - 40)) / Math.max(1, values.length - 1)}
             cy={height - 20 - ((n - min) / (top - min)) * (height - 40)}
             r="4"

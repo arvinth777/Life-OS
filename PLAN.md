@@ -156,3 +156,7 @@ The pixel/voxel design audit, one-line decisions, motion behavior, and verificat
 ## Purpose-led placement revision
 
 The owner requested removing water from Home and tying animation to actions. [Purpose-led design](docs/INTENTIONAL_DESIGN.md) records the placement rationale for all nine modules, hydration behavior, and verification. It supersedes the original dashboard placement of water and steps.
+
+## Interaction polish
+
+[Playful, purposeful interactions](docs/INTERACTION_POLISH.md) records the motion audit and decisions: confirmed check-offs and save receipts, DSA teaching/review transitions, and data-driven chart and muscle feedback. The nine-module layout and free hosting stack stay in place.

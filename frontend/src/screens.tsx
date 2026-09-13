@@ -22,6 +22,7 @@ import {
   Trend,
 } from "./components";
 import Preferences from "./preferences";
+import { CompleteTask, ValueBar } from "./feedback";
 import { downloadBackup, restoreBackup } from "./backup";
 export function Journal(p: any) {
   const [entries, setEntries] = useState<any[]>([]);
@@ -363,6 +364,7 @@ export function Academic(p: any) {
                       {c.credits} credits · {(c.coverage * 100).toFixed(0)}% of
                       component weight graded
                     </small>
+                    <ValueBar ratio={c.coverage} />
                   </div>
                   <strong>
                     {c.average?.toFixed(1) ?? "—"}
@@ -431,37 +433,11 @@ export function Work(p: any) {
           tab === "tasks"
             ? (r: any) =>
                 r.status !== "done" && (
-                  <Complete task={r} onRefresh={p.onRefresh} />
+                  <CompleteTask task={r} onRefresh={p.onRefresh} />
                 )
             : undefined
         }
       />
-    </>
-  );
-}
-function Complete({ task, onRefresh }: any) {
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  return (
-    <>
-      <button
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await api("/tasks/" + task.id + "/complete", "POST");
-            onRefresh();
-          } catch (e) {
-            setError(e.message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <Check size={16} />
-        Complete
-      </button>
-      {error && <small className="error">{error}</small>}
     </>
   );
 }
@@ -494,7 +470,7 @@ export function Tasks(p: any) {
                 : r.status !== "done"
           }
           actions={(r: any) =>
-            r.status !== "done" && <Complete task={r} onRefresh={p.onRefresh} />
+            r.status !== "done" && <CompleteTask task={r} onRefresh={p.onRefresh} />
           }
         />
       )}

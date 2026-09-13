@@ -11,6 +11,7 @@ import {
   Modal,
 } from "./components";
 import { WaterTracker } from "./WaterTracker";
+import { ValueBar } from "./feedback";
 export function Physical(p: any) {
   const [tab, setTab] = useState("overview");
   const [data, setData] = useState<any>();
@@ -165,9 +166,9 @@ export function Physical(p: any) {
                   volume
                     .filter((g) => g.volume > 0)
                     .map((g) => (
-                      <div key={g.id} className="target-row">
-                        <span>{g.name}</span>
-                        <strong>{g.volume.toFixed(1)} sets</strong>
+                      <div key={g.id} className="volume-row">
+                        <div className="target-row"><span>{g.name}</span><strong>{g.volume.toFixed(1)} sets</strong></div>
+                        <ValueBar ratio={g.volume / Math.max(1, ...volume.map((m) => m.volume))} />
                       </div>
                     ))
                 ) : (
@@ -413,7 +414,7 @@ function BodyMap({ volume }: any) {
               .filter((g) => g.view === view || g.view === "both")
               .map((g) => (
                 <g
-                  key={g.map_key}
+                  key={`${g.map_key}-${g.volume}`}
                   data-muscle={g.map_key}
                   data-volume={g.volume}
                   className={g.volume > 0 ? "muscle active" : "muscle"}

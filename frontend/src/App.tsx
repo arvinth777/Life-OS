@@ -13,7 +13,6 @@ import {
   LogOut,
   ArrowUpRight,
   Plus,
-  Check,
   ArrowRight,
   PanelLeft,
 } from "lucide-react";
@@ -35,6 +34,7 @@ import {
 import { DSA } from "./dsa";
 import { Physical } from "./physical";
 import { VoxelScene } from "./VoxelScene";
+import { SuccessFeedback, CompleteTask } from "./feedback";
 const navigation = [
   ["home", "Today", Home],
   ["journal", "Journal", BookOpen],
@@ -126,6 +126,7 @@ export default function App() {
       >
         Skip to content
       </a>
+      <SuccessFeedback />
       <aside className="sidebar">
         <a className="brand" href="#home" onClick={() => navigate("home")}>
           <span className="brand-mark">
@@ -394,20 +395,7 @@ function Today({ refresh, onRefresh, navigate, onQuick }: any) {
             {data.tasks.length ? (
               data.tasks.map((task: any) => (
                 <div className="task-row" key={task.id}>
-                  <button
-                    className="check-button"
-                    aria-label={"Complete " + task.title}
-                    onClick={async () => {
-                      try {
-                        await api("/tasks/" + task.id + "/complete", "POST");
-                        onRefresh();
-                      } catch (e) {
-                        setError(e.message);
-                      }
-                    }}
-                  >
-                    <Check size={16} />
-                  </button>
+                  <CompleteTask task={task} onRefresh={onRefresh} compact />
                   <div>
                     <strong>{task.title}</strong>
                     <small>{fmt(task.due_at)}</small>

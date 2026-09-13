@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
   ChevronLeft,
@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 import { api, title, fmt, todayDate } from "./api";
 import { Panel, Records, Tabs, Editor, Empty, Trend } from "./components";
+import { SuccessMark, savedFeedback, confirmationPause, ValueBar } from "./feedback";
 export function DSA(p: any) {
   const [tab, setTab] = useState("learn");
   const [data, setData] = useState<any>({});
   const [selected, setSelected] = useState("");
-  const [step, setStep] = useState(0);
   const [edit, setEdit] = useState<any>();
   const [author, setAuthor] = useState("lessons");
   const [error, setError] = useState("");
@@ -86,7 +86,6 @@ export function DSA(p: any) {
                       key={l.id}
                       onClick={() => {
                         setSelected(l.id);
-                        setStep(0);
                       }}
                     >
                       <span>
@@ -121,65 +120,7 @@ export function DSA(p: any) {
                     <div className="prose">{lesson.body}</div>
                     {patterns.map((pattern: any) => (
                       <section key={pattern.id}>
-                        <div className="section-head">
-                          <h3>Walk through it</h3>
-                          <span className="muted">
-                            {Math.min(step + 1, pattern.walkthrough.length)} /{" "}
-                            {pattern.walkthrough.length}
-                          </span>
-                        </div>
-                        {pattern.walkthrough.length > 0 && (
-                          <div className="walkthrough">
-                            <div className="array-cells">
-                              {pattern.walkthrough[
-                                Math.min(step, pattern.walkthrough.length - 1)
-                              ].values.map((value: any, i: number) => (
-                                <div key={i}>
-                                  <span
-                                    className={
-                                      pattern.walkthrough[
-                                        Math.min(
-                                          step,
-                                          pattern.walkthrough.length - 1,
-                                        )
-                                      ].active.includes(i)
-                                        ? "highlight"
-                                        : ""
-                                    }
-                                  >
-                                    {value}
-                                  </span>
-                                  <small>{i}</small>
-                                </div>
-                              ))}
-                            </div>
-                            <p>
-                              {
-                                pattern.walkthrough[
-                                  Math.min(step, pattern.walkthrough.length - 1)
-                                ].caption
-                              }
-                            </p>
-                            <div className="actions">
-                              <button
-                                disabled={step === 0}
-                                onClick={() => setStep((s) => s - 1)}
-                              >
-                                <ChevronLeft size={16} />
-                                Back
-                              </button>
-                              <button
-                                disabled={
-                                  step >= pattern.walkthrough.length - 1
-                                }
-                                onClick={() => setStep((s) => s + 1)}
-                              >
-                                Next step
-                                <ChevronRight size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                        {pattern.walkthrough.length > 0 && <Walkthrough key={pattern.id} steps={pattern.walkthrough} />}
                         <div className="section-head">
                           <h3>Try it yourself</h3>
                           <button
@@ -279,6 +220,7 @@ export function DSA(p: any) {
                   <small>
                     {r.attempts} attempts · {r.solved} distinct problems solved
                   </small>
+                  {r.accuracy !== null && <ValueBar ratio={r.accuracy} />}
                 </div>
                 <span>
                   {r.accuracy === null
@@ -367,48 +309,77 @@ function Problem({ problem, onAttempt }: any) {
     </details>
   );
 }
+const reviewDate = (date: string) => new Intl.DateTimeFormat(undefined, {
+  day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+}).format(new Date(date + "T12:00:00Z"));
 function ReviewCard({ note, onRefresh }: any) {
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<any>();
+  const locked = useRef(false);
   return (
-    <Panel title={note.title}>
-      <p className="prose">{note.front}</p>
-      {show ? (
-        <>
-          <div className="feedback prose">{note.back}</div>
-          <p className="muted">
-            0: no recall · 1: recognized · 2: incorrect · 3: difficult · 4: good
-            · 5: effortless
-          </p>
-          <div className="review-grades">
-            {[0, 1, 2, 3, 4, 5].map((grade) => (
-              <button
-                key={grade}
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
+    <Panel title={note.title} className={"review-card" + (result ? " review-complete" : "")}>
+      {result ? (
+        <div className="review-result" role="status">
+          <SuccessMark burst />
+          <div><strong>Review saved</strong><p>Next review: {reviewDate(result.due_on)}</p></div>
+        </div>
+      ) : <>
+        <p className="prose">{note.front}</p>
+        {show ? (
+          <div className="review-answer">
+            <div className="feedback prose">{note.back}</div>
+            <p className="muted">0: no recall · 1: recognized · 2: incorrect · 3: difficult · 4: good · 5: effortless</p>
+            <div className="review-grades">
+              {[0, 1, 2, 3, 4, 5].map((grade) => (
+                <button key={grade} disabled={busy} onClick={async () => {
+                  if (locked.current) return;
+                  locked.current = true; setBusy(true); setError("");
                   try {
-                    await api("/reviews/" + note.id, "POST", { grade });
+                    const next = await api("/reviews/" + note.id, "POST", { grade });
+                    setResult(next);
+                    savedFeedback("Review saved", `Next review: ${reviewDate(next.due_on)}`);
+                    await confirmationPause();
                     onRefresh();
                   } catch (e) {
-                    setError(e.message);
-                  } finally {
-                    setBusy(false);
+                    setError(e.message); setBusy(false); locked.current = false;
                   }
-                }}
-              >
-                {grade}
-              </button>
-            ))}
+                }}>{grade}</button>
+              ))}
+            </div>
           </div>
-        </>
-      ) : (
-        <button onClick={() => setShow(true)}>Reveal answer</button>
-      )}
-      {error && <p className="error">{error}</p>}
+        ) : <button onClick={() => setShow(true)}>Reveal answer</button>}
+      </>}
+      {error && <p className="error" role="alert">{error}</p>}
     </Panel>
   );
+}
+function Walkthrough({ steps }: { steps: any[] }) {
+  const [step, setStep] = useState(0);
+  const current = steps[step];
+  return <>
+    <div className="section-head walkthrough-heading">
+      <h3>Walk through it</h3>
+      <span className="muted">{step + 1} / {steps.length}</span>
+    </div>
+    <div className="walkthrough">
+      <div className="step-rail" role="progressbar" aria-label="Walkthrough position" aria-valuemin={1} aria-valuemax={steps.length} aria-valuenow={step + 1}>
+        {steps.map((_, i) => <span key={i} className={i <= step ? "reached" : ""} aria-hidden="true" />)}
+      </div>
+      <div className="array-cells">
+        {current.values.map((value: any, i: number) => <div key={i} className={current.active.includes(i) ? "cell-active" : ""}>
+          <span className={current.active.includes(i) ? "highlight" : ""} aria-label={`Value ${value}, index ${i}${current.active.includes(i) ? ", active" : ""}`}>{value}</span>
+          <small>{i}</small><i className="cell-marker" aria-hidden="true" />
+        </div>)}
+      </div>
+      <p className="step-caption" key={step} aria-live="polite" aria-atomic="true">{current.caption}</p>
+      <div className="actions">
+        <button disabled={step === 0} onClick={() => setStep((n) => n - 1)}><ChevronLeft size={16} />Back</button>
+        <button disabled={step === steps.length - 1} onClick={() => setStep((n) => n + 1)}>Next step<ChevronRight size={16} /></button>
+      </div>
+    </div>
+  </>;
 }
 function Tutor({ lesson, configured }: any) {
   const [messages, setMessages] = useState<any[]>([]);

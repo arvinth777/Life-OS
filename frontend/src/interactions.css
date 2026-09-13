@@ -1,0 +1,75 @@
+/* Short, event-driven feedback. Layer 20 is above the workspace; native dialogs
+   remain in the browser top layer. Nothing moves continuously at rest. */
+.feedback-region { position: fixed; bottom: 24px; right: 24px; z-index: 20; max-width: calc(100vw - 32px); pointer-events: none; }
+.save-receipt { display: flex; align-items: center; gap: 14px; width: min(370px, calc(100vw - 32px)); padding: 14px 12px 14px 18px; border: 1px solid var(--color-rule); border-left: 3px solid var(--color-success); border-radius: 8px; background: var(--color-surface); box-shadow: 0 8px 32px #0d213425; pointer-events: auto; }
+.save-receipt > div { flex: 1; min-width: 0; }
+.save-receipt strong { font-size: var(--text-sm); }
+.save-receipt small { margin-top: 3px; overflow-wrap: anywhere; }
+.save-receipt .icon { border: 0; background: transparent; }
+.success-mark { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0; color: var(--color-success); background: var(--color-accent-soft); border-radius: 50%; }
+.success-pixels { position: absolute; inset: 0; pointer-events: none; }
+.success-pixels i { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; background: var(--color-success); opacity: 0; }
+.success-pixels i:nth-child(1) { --px: -24px; --py: -17px; }
+.success-pixels i:nth-child(2) { --px: 22px; --py: -20px; }
+.success-pixels i:nth-child(3) { --px: -18px; --py: 22px; }
+.success-pixels i:nth-child(4) { --px: 24px; --py: 18px; }
+.task-completion { min-width: 0; max-width: 100%; display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.complete-action.done, .complete-action.done:disabled { opacity: 1; color: var(--color-success); border-color: var(--color-success); }
+.complete-action.done .success-mark { background: transparent; width: 22px; height: 22px; }
+.check-button.complete-action { width: 32px; min-height: 32px; height: 32px; }
+.complete-action.saving { cursor: progress; }
+.task-completion small.error { max-width: 240px; white-space: normal; }
+.tabs button.active { position: relative; border-bottom-color: transparent; }
+.tabs button.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--color-accent); transform-origin: left; }
+.value-bar { display: block; height: 5px; width: 100%; max-width: 320px; border-radius: 2px; overflow: hidden; background: var(--color-soft); margin-top: 10px; }
+.value-bar > i { display: block; height: 100%; width: 100%; background: var(--color-accent); transform-origin: left; }
+.volume-row { margin-bottom: 17px; }
+.volume-row .target-row { border: 0; padding-bottom: 0; }
+.volume-row .value-bar { max-width: none; }
+.step-rail { display: flex; gap: 5px; margin-bottom: 28px; }
+.step-rail > span { flex: 1; min-width: 0; height: 4px; border-radius: 1px; background: var(--color-rule); }
+.step-rail > span.reached { background: var(--color-accent); }
+.walkthrough-heading { align-items: center; }
+.array-cells > div { position: relative; padding-bottom: 12px; }
+.array-cells .highlight { transform: translateY(-5px); box-shadow: 0 5px 0 var(--color-rule); }
+.cell-marker { display: block; width: 12px; height: 3px; background: var(--color-accent); position: absolute; bottom: 1px; left: calc(50% - 6px); opacity: 0; transform: scaleX(.3); }
+.cell-active .cell-marker { opacity: 1; transform: scaleX(1); }
+.step-caption { min-height: 3.1em; }
+.review-card { perspective: 900px; }
+.review-answer { transform-origin: center top; }
+.review-answer > .feedback { border-left: 3px solid var(--color-accent); }
+.review-result { display: flex; align-items: center; gap: 18px; padding: 24px 0; }
+.review-result .success-mark { width: 42px; height: 42px; }
+.review-result p { margin: 6px 0 0; color: var(--color-muted); font-size: var(--text-sm); }
+.review-complete { border-color: var(--color-success); }
+.chart-point { transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .save-receipt { animation: receipt-arrive 330ms var(--ease-out); }
+  .success-mark.burst > svg { animation: check-pop 360ms var(--ease-out); }
+  .success-pixels i { animation: pixel-burst 650ms ease-out; }
+  .complete-action { transition: transform 150ms var(--ease-out), background-color 150ms ease; }
+  .tabs button.active::after { animation: selection-grow 260ms var(--ease-out); }
+  .value-bar > i { animation: selection-grow 650ms var(--ease-out); transition: transform 650ms var(--ease-out); }
+  .array-cells span { transition: transform 350ms var(--ease-out), background-color 250ms ease, border-color 250ms ease; }
+  .cell-marker { transition: transform 280ms var(--ease-out), opacity 250ms ease; }
+  .step-caption { animation: explanation-arrive 280ms var(--ease-out); }
+  .step-rail .reached { animation: rail-arrive 300ms ease-out; }
+  .review-answer { animation: answer-turn 420ms var(--ease-out); }
+  .review-result { animation: receipt-arrive 300ms var(--ease-out); }
+  .muscle.active path { animation: muscle-light 800ms ease-out; }
+  .chart-reveal { animation: rail-arrive 500ms ease-out; }
+  .chart-point { animation: point-plot 450ms var(--ease-out) both; }
+  .problem .hints p { animation: explanation-arrive 280ms var(--ease-out); }
+  .problem > summary svg { transition: transform 220ms var(--ease-out); }
+  .solution[open] pre { animation: explanation-arrive 280ms var(--ease-out); }
+}
+@keyframes receipt-arrive { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes check-pop { 0% { opacity: 0; transform: scale(.4); } 65% { opacity: 1; transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes pixel-burst { 0% { opacity: 0; transform: translate(0,0); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--px),var(--py)) rotate(70deg); } }
+@keyframes selection-grow { from { transform: scaleX(0); } }
+@keyframes explanation-arrive { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes rail-arrive { from { opacity: .3; } to { opacity: 1; } }
+@keyframes answer-turn { from { opacity: 0; transform: rotateX(-12deg) translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes muscle-light { 0% { opacity: .15; } 55% { opacity: 1; } 75% { opacity: .7; } 100% { opacity: 1; } }
+@keyframes point-plot { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
+@media (max-width: 768px) { .feedback-region { right: 16px; bottom: 16px; } }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { api, title } from "./api";
 import { Panel } from "./components";
+import { savedFeedback } from "./feedback";
 export default function Preferences({ refresh, onRefresh }: any) {
   const [records, setRecords] = useState<any[]>([]);
   const [cfg, setCfg] = useState<any>({});
@@ -35,6 +36,7 @@ export default function Preferences({ refresh, onRefresh }: any) {
           });
       }
       setSaved(true);
+      savedFeedback("Preferences saved");
       onRefresh();
     } catch (e) {
       setError(e.message);

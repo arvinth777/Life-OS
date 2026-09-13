@@ -188,6 +188,8 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
     await expect(page.locator('g[data-muscle="shoulders"].active')).toHaveCount(
       2,
     );
+    expect(await page.locator(".muscle.active path").first().evaluate((el) => getComputedStyle(el).animationName)).toBe("muscle-light");
+    await expect(page.locator(".volume-row .value-bar")).toHaveCount(3);
     await page.getByRole("button", { name: "Calendar", exact: true }).click();
     await page.getByRole("button", { name: "Event", exact: true }).click();
     await page
