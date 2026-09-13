@@ -152,3 +152,7 @@ Additional dependency risk: Vercel enforces payload, execution-time and monthly 
 ## September 14 visual refresh
 
 The pixel/voxel design audit, one-line decisions, motion behavior, and verification are documented in [Design refresh](docs/DESIGN_REFRESH.md). Module contracts, data semantics, and the free hosting architecture are unchanged.
+
+## Purpose-led placement revision
+
+The owner requested removing water from Home and tying animation to actions. [Purpose-led design](docs/INTENTIONAL_DESIGN.md) records the placement rationale for all nine modules, hydration behavior, and verification. It supersedes the original dashboard placement of water and steps.

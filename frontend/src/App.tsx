@@ -15,20 +15,13 @@ import {
   Plus,
   Check,
   ArrowRight,
-  Droplets,
-  Footprints,
-  Sun,
   PanelLeft,
 } from "lucide-react";
-import { api, base, setBase, setZone, fmt, title } from "./api";
+import { api, base, setBase, setZone, fmt } from "./api";
 import {
   Editor,
   Panel,
-  Metric,
   Empty,
-  Records,
-  Tabs,
-  Trend,
 } from "./components";
 import {
   Journal,
@@ -55,15 +48,15 @@ const navigation = [
 ] as const;
 const subtitles: any = {
   home: "A little structure. Room for everything else.",
-  journal: "Put your thoughts somewhere you can return to.",
-  personality: "Notice your patterns. Practice what matters.",
-  academics: "Your terms, coursework, and direction.",
-  work: "Keep the next step close to the bigger picture.",
+  journal: "Write, find, and revisit your entries.",
+  personality: "Reflect with prompts and track your own trait ratings.",
+  academics: "Track coursework, deadlines, and weighted grades.",
+  work: "Projects, their next tasks, and your career goals.",
   dsa: "Start from zero. Understand one thing at a time.",
-  physical: "Small actions, recorded honestly.",
-  calendar: "Make room for what matters.",
-  tasks: "One next action at a time.",
-  settings: "Make this workspace yours.",
+  physical: "Daily readings, workouts, and your personal targets.",
+  calendar: "Events and deadlines in one agenda.",
+  tasks: "Prioritize tasks, finish subtasks, and manage recurrence.",
+  settings: "Preferences, connections, reminders, and backups.",
 };
 export default function App() {
   const [session, setSession] = useState(
@@ -71,6 +64,7 @@ export default function App() {
   );
   const [page, setPage] = useState(location.hash.slice(1) || "home");
   const [schema, setSchema] = useState<any>({});
+  const [settings, setSettings] = useState<Record<string, any>>({});
   const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -100,6 +94,7 @@ export default function App() {
     Promise.all([api("/schema"), api("/data/settings"), api("/auth/me")])
       .then(([schema, settings]) => {
         setSchema(schema);
+        setSettings(Object.fromEntries(settings.map((r: any) => [r.key, r.value])));
         setZone(
           settings.find((x: any) => x.key === "timezone")?.value || "UTC",
         );
@@ -117,7 +112,7 @@ export default function App() {
         }}
       />
     );
-  const props = { schema, refresh, onRefresh: reload, navigate };
+  const props = { schema, settings, refresh, onRefresh: reload, navigate };
   return (
     <div className="app-shell">
       <a
@@ -195,29 +190,19 @@ export default function App() {
         </div>
       </aside>
       <div className="workspace">
-        <div className="topbar">
-          <span>
-            My workspace <span className="crumb">/</span>{" "}
-            {navigation.find((x) => x[0] === page)?.[1] || "Settings"}
-          </span>
-          <span className="topbar-note">A day at a time</span>
-        </div>
         <main id="main" tabIndex={-1}>
           <header className="page-head" key={`header-${page}`}>
             <div>
-              <div className="eyebrow">
-                {page === "home"
-                  ? new Date().toLocaleDateString(undefined, {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                    })
-                  : "LIFE OS"}
-              </div>
+              {page === "home" && <div className="eyebrow">
+                {new Date().toLocaleDateString(undefined, {
+                  weekday: "long", month: "long", day: "numeric",
+                  timeZone: settings.timezone || "UTC",
+                })}
+              </div>}
               <h1>
                 {navigation.find((x) => x[0] === page)?.[1] || "Settings"}
               </h1>
-              <p>{subtitles[page]}</p>
+              {page !== "home" && <p>{subtitles[page]}</p>}
             </div>
             {page === "home" && (
               <button className="primary" onClick={() => setQuick("tasks")}>
@@ -392,61 +377,10 @@ function Today({ refresh, onRefresh, navigate, onQuick }: any) {
       })
       .catch((e) => setError(e.message));
   }, [refresh]);
-  async function water() {
-    try {
-      await api("/ingest", "POST", [
-        {
-          metric: "water",
-          value: 250,
-          unit: "ml",
-          recorded_at: new Date().toISOString(),
-          source: "manual",
-          device: "owner",
-          external_id: crypto.randomUUID(),
-        },
-      ]);
-      onRefresh();
-    } catch (e) {
-      setError(e.message);
-    }
-  }
   if (!data) return <p>{error || "Loading today…"}</p>;
   return (
     <>
       {error && <p className="error">{error}</p>}
-      <div className="daily-stats">
-        <Metric
-          label="Water today"
-          value={(data.metrics.water || 0).toLocaleString()}
-          unit="ml"
-        >
-          <button className="text-button" onClick={water}>
-            <Plus size={14} />
-            250 ml
-          </button>
-        </Metric>
-        <Metric
-          label="Steps today"
-          value={(data.metrics.steps || 0).toLocaleString()}
-          unit="steps"
-        >
-          <Footprints size={20} />
-        </Metric>
-        <div className="streaks">
-          <span>Keep showing up</span>
-          <div>
-            {Object.entries(data.streaks).map(([name, count]: any) => (
-              <div key={name}>
-                <strong>
-                  {count}
-                  <small>d</small>
-                </strong>
-                <span>{name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
       <div className="today-columns">
         <div>
           <Panel
@@ -485,7 +419,7 @@ function Today({ refresh, onRefresh, navigate, onQuick }: any) {
               ))
             ) : (
               <Empty
-                text="No tasks due today. Give the day a little direction."
+                text="No tasks due today."
                 action={
                   <button onClick={() => onQuick("tasks")}>
                     <Plus size={16} />
@@ -540,32 +474,36 @@ function Today({ refresh, onRefresh, navigate, onQuick }: any) {
           </Panel>
         </div>
         <div>
-          <section className="learning-note">
-            <span className="eyebrow">A LITTLE PRACTICE</span>
-            <VoxelScene compact />
-            <h2>
-              Build understanding,
-              <br />
-              one step at a time.
-            </h2>
-            <p>
-              {data.reviews_due
-                ? `${data.reviews_due} concept notes are ready for review.`
-                : "Your Python learning path starts with the basics."}
-            </p>
+          <section className="learning-summary">
+            <h2>Python practice</h2>
+            <p>{data.reviews_due
+              ? `${data.reviews_due} concept ${data.reviews_due === 1 ? "note is" : "notes are"} due for review.`
+              : "No concept reviews due. Continue with a lesson when you have time."}</p>
             <button onClick={() => navigate("dsa")}>
-              Open your learning path
-              <ArrowRight size={17} />
+              Open your learning path <ArrowRight size={17} />
             </button>
           </section>
-          <Panel title="Gentle reminders">
+          <section className="habit-summary" aria-labelledby="habit-heading">
+            <h2 id="habit-heading">Keep showing up</h2>
+            {Object.entries(data.streaks).map(([name, count]: any) => (
+              <div className="habit-row" key={name}>
+                <span>{name}</span><strong>{count} <small>{count === 1 ? "day" : "days"}</small></strong>
+              </div>
+            ))}
+          </section>
+          {reminders.some((r) => r.kind !== "water") && <Panel title="Reminders">
+
             {reminders.length ? (
-              reminders.map((r) => (
+              reminders.filter((r) => r.kind !== "water").map((r) => (
                 <div className="reminder" key={r.id}>
                   <div>
-                    <Droplets size={17} />
+                    {r.kind === "journal" ? <BookOpen size={17} /> : <ListTodo size={17} />}
                     <span>{r.title}</span>
                   </div>
+                  <div className="reminder-actions">
+                  <button className="text-button" onClick={() => r.kind === "journal" ? onQuick("journal_entries") : navigate("tasks")}>
+                    {r.kind === "journal" ? "Write an entry" : "View tasks"}
+                  </button>
                   <button
                     className="text-button"
                     onClick={async () => {
@@ -582,22 +520,23 @@ function Today({ refresh, onRefresh, navigate, onQuick }: any) {
                   >
                     Dismiss
                   </button>
+                  </div>
                 </div>
               ))
             ) : (
               <p className="muted">Nothing needs a nudge right now.</p>
             )}
-          </Panel>
-          <button
+          </Panel>}
+          {!reminders.some((r) => r.kind === "journal") && <button
             className="journal-shortcut"
             onClick={() => onQuick("journal_entries")}
           >
             <BookOpen size={20} />
             <span>
-              A thought worth keeping?<small>Write a journal entry</small>
+              Write a journal entry
             </span>
             <ArrowUpRight size={18} />
-          </button>
+          </button>}
         </div>
       </div>
     </>

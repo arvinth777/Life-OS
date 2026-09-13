@@ -602,10 +602,7 @@ export function Calendar(p: any) {
           columns={["title", "starts_at", "ends_at", "recurrence"]}
         />
       )}
-      <div className="notice">
-        Local calendar is ready. Google two-way sync is Phase 2 scaffolding and
-        is not connected.
-      </div>
+      <p className="muted">Google Calendar is not connected. Events saved here stay in Life OS.</p>
       {edit && (
         <Editor
           table="calendar_events"

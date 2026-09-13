@@ -10,6 +10,7 @@ import {
   Empty,
   Modal,
 } from "./components";
+import { WaterTracker } from "./WaterTracker";
 export function Physical(p: any) {
   const [tab, setTab] = useState("overview");
   const [data, setData] = useState<any>();
@@ -19,17 +20,20 @@ export function Physical(p: any) {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [edit, setEdit] = useState<any>();
   const [health, setHealth] = useState(false);
+  const [reminders, setReminders] = useState<any[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
     Promise.all([
       api("/dashboard"),
       api("/data/workouts"),
       api("/data/metric_suggestions"),
+      api("/reminders").catch(() => []),
     ])
-      .then(([a, b, c]) => {
+      .then(([a, b, c, d]) => {
         setData(a);
         setWorkouts(b);
         setSuggestions(c);
+        setReminders(d.filter((r: any) => r.kind === "water"));
       })
       .catch((e) => setError(e.message));
   }, [p.refresh]);
@@ -58,36 +62,49 @@ export function Physical(p: any) {
       />
       {tab === "overview" ? (
         <>
-          <div className="physical-stats">
-            <Metric label="Water" value={data?.metrics.water || 0} unit="ml" />
-            <Metric label="Steps" value={data?.metrics.steps || 0} />
-            <Metric
-              label="Sleep"
-              value={data?.metrics.sleep || 0}
-              unit="hours"
-            />
-            <Metric
-              label="Activity"
-              value={data?.metrics.activity || 0}
-              unit="min"
-            />
+          <div className="daily-health">
+            <div>
+              <WaterTracker
+                total={data ? (data.metrics.water || 0) : undefined}
+                goal={Number(p.settings?.water_goal_ml) || 2000}
+                refresh={async () => { setData(await api("/dashboard")); }}
+                onCustom={() => setHealth(true)}
+                onGoal={() => p.navigate("settings")}
+              />
+              {data && (data.metrics.water || 0) < (Number(p.settings?.water_goal_ml) || 2000) && reminders.map((r) => (
+                <div className="water-reminder" key={r.id}>
+                  <span>{r.title}</span>
+                  <button className="text-button" onClick={async () => {
+                    try {
+                      await api("/data/reminder_dismissals", "POST", { rule_id: r.id, occurrence_key: r.occurrence_key });
+                      setReminders((items) => items.filter((item) => item.id !== r.id));
+                    } catch (e) { setError(e.message); }
+                  }}>Dismiss</button>
+                </div>
+              ))}
+            </div>
+            <section className="daily-readings" aria-labelledby="readings-heading">
+              <div className="section-head">
+                <h2 id="readings-heading">Daily readings</h2>
+                <button onClick={() => setHealth(true)}><Plus size={16} />Health reading</button>
+              </div>
+              <div className="physical-stats">
+                <Metric label="Steps" value={data?.metrics.steps ?? "—"} />
+                <Metric label="Sleep" value={data?.metrics.sleep ?? "—"} unit="hours" />
+                <Metric label="Activity" value={data?.metrics.activity ?? "—"} unit="min" />
+              </div>
+              <p className="muted">Today’s recorded totals. Add a reading whenever you need to.</p>
+            </section>
           </div>
-          <div className="toolbar">
-            <button onClick={() => setHealth(true)}>
-              <Plus size={16} />
-              Health reading
-            </button>
-            <button
-              className="primary"
-              onClick={() => setEdit({ table: "workouts" })}
-            >
-              <Plus size={16} />
-              Log workout
+          <div className="training-heading">
+            <h2>Training</h2>
+            <button className="primary" onClick={() => setEdit({ table: "workouts" })}>
+              <Plus size={16} />Log workout
             </button>
           </div>
           <div className="physical-layout">
             <Panel
-              title="Where you put the work"
+              title="Muscles trained"
               action={
                 <select
                   aria-label="Training period"
