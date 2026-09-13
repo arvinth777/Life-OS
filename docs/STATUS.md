@@ -4,7 +4,9 @@
 
 ## Phase 1
 
-Implemented and running locally against real PostgreSQL: all nine modules, single-owner Argon2/JWT authentication, Alembic migrations, seeded curriculum and exercise library, in-app reminders, and complete CSV/JSON export/import. Neon is linked, and its separate Hello function is live. A Vercel project exists in the owner's verified Hobby account; the Life OS API itself has not yet been deployed. Migrations 0001–0002, seed and owner bootstrap passed on a temporary Neon branch, which was then deleted. Initializing the production database and sending its connection and encryption key to Vercel are awaiting explicit approval after automatic approval review rejected that step.
+Implemented and running locally against real PostgreSQL: all nine modules, single-owner Argon2/JWT authentication, Alembic migrations, seeded curriculum and exercise library, in-app reminders, and complete CSV/JSON export/import. With the owner's explicit approval, migrations 0001–0002, seed and owner bootstrap were applied to Neon production after verification on a temporary branch. That test branch was deleted. Database connection and encryption key are in Vercel's encrypted environment settings. The API was deployed to the verified Hobby account and Vercel reports **Ready** at `https://life-os-api-six.vercel.app`. Local owner credentials also work for the separately initialized online owner. The frontend build targets that API; Sites deployment status is tracked separately in the delivery response. No personal journal, task or health history was copied from the local database. The separate Neon Hello function remains a demonstration and is not used by Life OS.
+
+Live verification boundary: database migrations, seed counts and owner bootstrap were verified directly against Neon; Vercel build/deployment status is Ready. Production HTTP workflows have not been smoke-tested in this session. The backend acceptance suite and browser backup/restore checks ran locally.
 
 | Acceptance criterion | Evidence |
 |---|---|

@@ -2,6 +2,8 @@
 
 Life OS runs as a Python FastAPI function on Vercel Hobby. The existing React frontend stays on Sites; Postgres stays in the owner's Neon Free project. Select Hobby, with no paid add-ons or Pro trial.
 
+Current API: `https://life-os-api-six.vercel.app`. Vercel project: `arvinth777s-projects/life-os-api`, production deployment `dpl_9iot4S5CQp4DT6S8Fi3bhxZCp4TC`, reported Ready. Set `VITE_API_URL=https://life-os-api-six.vercel.app` when rebuilding the frontend. The account remains on Hobby. Existing local owner credentials were reused for the online owner's password hash; no plaintext password was sent to Vercel.
+
 ## Setup
 
 1. Follow the README's Python environment setup. Use Python 3.13 and `pip install -r requirements.lock`.
