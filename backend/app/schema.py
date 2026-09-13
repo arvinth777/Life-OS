@@ -1,0 +1,420 @@
+"""Constrained PostgreSQL schema. Domain metadata also drives the owner-only editor."""
+
+import uuid
+from datetime import datetime, timezone
+import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+
+metadata = sa.MetaData()
+
+
+def now():
+    return datetime.now(timezone.utc)
+
+
+def col(name, typ=sa.Text, **kw):
+    return sa.Column(name, typ, **kw)
+
+
+def text(name, default="", **kw):
+    return col(name, default=default, nullable=False, **kw)
+
+
+def num(name, default=0, **kw):
+    return col(name, sa.Float, default=default, nullable=False, **kw)
+
+
+def integer(name, default=0, **kw):
+    return col(name, sa.Integer, default=default, nullable=False, **kw)
+
+
+def boolean(name, default=False):
+    return col(name, sa.Boolean, default=default, nullable=False)
+
+
+def json(name, default=dict):
+    return col(name, JSONB, default=default, nullable=False)
+
+
+def date(name, nullable=False):
+    return col(name, sa.Date, nullable=nullable)
+
+
+def time(name, nullable=False, default=None):
+    return col(
+        name, sa.DateTime(timezone=True), nullable=nullable, default=default, index=True
+    )
+
+
+def fk(name, target, nullable=False, delete="RESTRICT", unique=False):
+    return sa.Column(
+        name,
+        UUID(as_uuid=True),
+        sa.ForeignKey(target + ".id", ondelete=delete),
+        nullable=nullable,
+        index=True,
+        unique=unique,
+    )
+
+
+def table(name, *fields):
+    return sa.Table(
+        name,
+        metadata,
+        col("id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
+        time("created_at", default=now),
+        time("updated_at", default=now),
+        *fields
+    )
+
+
+def check(expr):
+    return sa.CheckConstraint(expr)
+
+
+def unique(*fields):
+    return sa.UniqueConstraint(*fields)
+
+
+owners = table(
+    "owners",
+    text("username", unique=True),
+    text("password_hash"),
+    boolean("singleton", True),
+    unique("singleton"),
+    check("singleton = true"),
+)
+sessions = table(
+    "sessions",
+    fk("owner_id", "owners", delete="CASCADE"),
+    text("token_hash", unique=True),
+    time("expires_at"),
+)
+settings = table("settings", text("key", unique=True), json("value"))
+secrets = table("secrets", text("name", unique=True), text("ciphertext"))
+journal_entries = table(
+    "journal_entries", text("title"), text("body"), json("tags", list)
+)
+sa.Index(
+    "journal_search",
+    sa.func.to_tsvector(
+        sa.literal_column("'english'"),
+        journal_entries.c.title + sa.literal_column("' '") + journal_entries.c.body,
+    ),
+    postgresql_using="gin",
+)
+ai_feedback = table(
+    "ai_feedback",
+    fk("entry_id", "journal_entries", delete="CASCADE"),
+    text("body"),
+    text("provider"),
+)
+traits = table("traits", text("name", unique=True), boolean("retired"))
+trait_ratings = table(
+    "trait_ratings",
+    fk("trait_id", "traits"),
+    integer("score", 5),
+    time("recorded_at", default=now),
+    text("reflection"),
+    check("score BETWEEN 1 AND 10"),
+)
+reflection_prompts = table(
+    "reflection_prompts",
+    text("title"),
+    text("body"),
+    integer("interval_days", 7),
+    boolean("enabled", True),
+    check("interval_days > 0"),
+)
+reflections = table(
+    "reflections",
+    fk("prompt_id", "reflection_prompts", True),
+    text("domain", "personality"),
+    text("body"),
+    time("recorded_at", default=now),
+)
+terms = table(
+    "terms",
+    text("name"),
+    date("starts_on"),
+    date("ends_on"),
+    check("ends_on >= starts_on"),
+)
+courses = table(
+    "courses",
+    fk("term_id", "terms"),
+    text("name"),
+    num("credits", 1),
+    check("credits > 0"),
+)
+assignments = table(
+    "assignments",
+    fk("course_id", "courses"),
+    text("title"),
+    time("due_at"),
+    text("status", "open"),
+    text("notes"),
+)
+grade_components = table(
+    "grade_components",
+    fk("course_id", "courses"),
+    text("name"),
+    num("weight", 1),
+    check("weight > 0"),
+)
+grades = table(
+    "grades",
+    fk("component_id", "grade_components"),
+    text("title"),
+    num("earned"),
+    num("possible", 100),
+    check("earned >= 0 AND possible > 0"),
+)
+goals = table(
+    "goals",
+    text("domain", "academic"),
+    text("title"),
+    date("target_date", True),
+    text("status", "active"),
+    text("notes"),
+)
+projects = table(
+    "projects",
+    text("name"),
+    time("deadline", True),
+    text("status", "active"),
+    text("notes"),
+    json("tags", list),
+    json("custom_fields"),
+)
+custom_field_definitions = table(
+    "custom_field_definitions",
+    text("entity", "tasks"),
+    text("name"),
+    text("field_type", "text"),
+    json("options", list),
+    unique("entity", "name"),
+)
+work_notes = table(
+    "work_notes",
+    fk("project_id", "projects", True),
+    text("title"),
+    text("body"),
+    json("tags", list),
+    json("custom_fields"),
+)
+tasks = table(
+    "tasks",
+    text("title"),
+    text("notes"),
+    time("due_at", True),
+    integer("priority", 2),
+    text("status", "open"),
+    fk("parent_id", "tasks", True),
+    fk("project_id", "projects", True),
+    col("rrule", nullable=True),
+    time("recurrence_anchor", True),
+    col("series_id", UUID(as_uuid=True), default=uuid.uuid4, nullable=False),
+    fk("previous_id", "tasks", True, unique=True),
+    time("completed_at", True),
+    json("tags", list),
+    json("custom_fields"),
+    check("priority BETWEEN 1 AND 4"),
+)
+curriculum_modules = table(
+    "curriculum_modules", text("title"), integer("position"), text("description")
+)
+lessons = table(
+    "lessons",
+    fk("module_id", "curriculum_modules"),
+    text("title"),
+    integer("position"),
+    text("body"),
+    boolean("incomplete"),
+)
+patterns = table(
+    "patterns",
+    fk("lesson_id", "lessons"),
+    text("title"),
+    integer("position"),
+    text("explanation"),
+    json("walkthrough", list),
+    boolean("incomplete"),
+)
+problems = table(
+    "problems",
+    fk("pattern_id", "patterns"),
+    text("title"),
+    integer("position"),
+    text("difficulty", "gentle"),
+    text("statement"),
+    json("hints", list),
+    text("solution"),
+    text("explanation"),
+)
+problem_attempts = table(
+    "problem_attempts",
+    fk("problem_id", "problems"),
+    boolean("solved"),
+    num("minutes"),
+    text("notes"),
+    time("attempted_at", default=now),
+    check("minutes >= 0"),
+)
+concept_notes = table(
+    "concept_notes",
+    fk("pattern_id", "patterns", True),
+    text("title"),
+    text("front"),
+    text("back"),
+    num("ease_factor", 2.5),
+    integer("repetitions"),
+    integer("interval_days"),
+    date("due_on"),
+    check("ease_factor >= 1.3 AND repetitions >= 0 AND interval_days >= 0"),
+)
+reviews = table(
+    "reviews",
+    fk("note_id", "concept_notes", delete="CASCADE"),
+    integer("grade"),
+    time("reviewed_at", default=now),
+    json("previous_state"),
+    json("next_state"),
+    check("grade BETWEEN 0 AND 5"),
+)
+health_records = table(
+    "health_records",
+    text("metric"),
+    num("value"),
+    text("unit"),
+    time("recorded_at"),
+    text("source"),
+    text("device"),
+    text("external_id"),
+    unique("source", "external_id"),
+)
+sa.Index("health_metric_time", health_records.c.metric, health_records.c.recorded_at)
+ingestion_mappings = table(
+    "ingestion_mappings",
+    text("name", unique=True),
+    boolean("enabled", True),
+    json("mapping"),
+)
+metric_suggestions = table(
+    "metric_suggestions",
+    fk("record_id", "health_records"),
+    text("setting_key"),
+    json("proposed_value"),
+    text("status", "pending"),
+    unique("record_id", "setting_key"),
+)
+muscle_groups = table(
+    "muscle_groups",
+    text("name", unique=True),
+    text("map_key", unique=True),
+    text("view", "front"),
+)
+exercises = table("exercises", text("name", unique=True), text("instructions"))
+exercise_muscles = table(
+    "exercise_muscles",
+    fk("exercise_id", "exercises", delete="CASCADE"),
+    fk("muscle_id", "muscle_groups"),
+    num("contribution", 1),
+    unique("exercise_id", "muscle_id"),
+    check("contribution > 0 AND contribution <= 1"),
+)
+workouts = table(
+    "workouts", text("title"), time("performed_at", default=now), text("notes")
+)
+workout_sets = table(
+    "workout_sets",
+    fk("workout_id", "workouts", delete="CASCADE"),
+    fk("exercise_id", "exercises"),
+    integer("reps", 10),
+    num("weight_kg"),
+    col("rpe", sa.Float, nullable=True),
+    check("reps > 0 AND weight_kg >= 0 AND (rpe IS NULL OR rpe BETWEEN 1 AND 10)"),
+)
+calendar_events = table(
+    "calendar_events",
+    text("title"),
+    text("description"),
+    time("starts_at"),
+    time("ends_at"),
+    boolean("all_day"),
+    text("timezone", "UTC"),
+    json("recurrence", list),
+    fk("master_id", "calendar_events", True),
+    time("original_start", True),
+    col("google_event_id", nullable=True, unique=True),
+    col("etag", nullable=True),
+    text("sync_state", "local"),
+    time("deleted_at", True),
+    check("ends_at > starts_at"),
+)
+calendar_sync = table(
+    "calendar_sync",
+    text("calendar_id", unique=True),
+    col("sync_token", nullable=True),
+    col("page_token", nullable=True),
+    col("channel_id", nullable=True),
+    col("channel_resource_id", nullable=True),
+    time("channel_expires_at", True),
+    time("last_synced_at", True),
+    boolean("pending"),
+    col("last_error", nullable=True),
+)
+sync_conflicts = table(
+    "sync_conflicts",
+    fk("event_id", "calendar_events", True, delete="SET NULL"),
+    json("local_version"),
+    json("remote_version"),
+    text("winner"),
+)
+reminder_rules = table(
+    "reminder_rules",
+    text("kind", "water"),
+    text("title"),
+    json("config"),
+    boolean("enabled", True),
+)
+reminder_dismissals = table(
+    "reminder_dismissals",
+    fk("rule_id", "reminder_rules", delete="CASCADE"),
+    text("occurrence_key"),
+    time("dismissed_at", default=now),
+    unique("rule_id", "occurrence_key"),
+)
+ai_usage = table(
+    "ai_usage",
+    text("feature"),
+    text("provider"),
+    text("model"),
+    integer("input_tokens"),
+    integer("output_tokens"),
+)
+integration_runs = table(
+    "integration_runs", text("provider"), text("status"), text("detail"), json("cursor")
+)
+auth_attempts = table(
+    "auth_attempts",
+    text("fingerprint", unique=True),
+    integer("failures"),
+    time("window_started_at", default=now),
+)
+
+SYSTEM = {
+    "owners",
+    "sessions",
+    "secrets",
+    "auth_attempts",
+    "reviews",
+    "ai_usage",
+    "integration_runs",
+    "sync_conflicts",
+    "calendar_sync",
+    "metric_suggestions",
+    "health_records",
+    "ai_feedback",
+}
+TABLES = metadata.tables

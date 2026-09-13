@@ -1,0 +1,165 @@
+"""Pure calculations; timestamps are instants and streak dates use the configured zone."""
+
+import math
+from datetime import datetime, timedelta, timezone, date
+from zoneinfo import ZoneInfo
+from dateutil.rrule import rrulestr
+
+
+def sm2(state, grade, today):
+    if not isinstance(grade, int) or not 0 <= grade <= 5:
+        raise ValueError("Review grade must be 0–5")
+    ef = float(state["ease_factor"])
+    reps = state["repetitions"]
+    interval = state["interval_days"]
+    # SM-2: failure q<3 restarts at repetition 0 with a one-day interval.
+    # Success intervals: 1, 6, then round(previous interval * PREVIOUS EF).
+    # EF' = max(1.3, EF + 0.1 - (5-q)*(0.08 + (5-q)*0.02)).
+    # Positive half values round upward, independent of Python's bankers rounding.
+    if grade < 3:
+        reps, interval = 0, 1
+    else:
+        interval = (
+            1 if reps == 0 else 6 if reps == 1 else math.floor(interval * ef + 0.5)
+        )
+        reps += 1
+    ef = max(1.3, ef + 0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02))
+    return dict(
+        ease_factor=round(ef, 8),
+        repetitions=reps,
+        interval_days=interval,
+        due_on=today + timedelta(days=interval),
+    )
+
+
+def streak(instants, zone, at=None):
+    tz = ZoneInfo(zone)
+    today = (at or datetime.now(timezone.utc)).astimezone(tz).date()
+    days = {t.astimezone(tz).date() for t in instants if t}
+    cursor = today if today in days else today - timedelta(days=1)
+    count = 0
+    while cursor in days:
+        count += 1
+        cursor -= timedelta(days=1)
+    return count
+
+
+def next_task_date(rule, anchor, completed, zone):
+    tz = ZoneInfo(zone)
+    parsed = rrulestr(rule, dtstart=anchor.astimezone(tz))
+    return parsed.after(completed.astimezone(tz), inc=False)
+
+
+def nutrition(body):
+    keys = [
+        "weight_kg",
+        "height_cm",
+        "age",
+        "sex",
+        "activity_multiplier",
+        "goal",
+        "protein_g_per_kg",
+    ]
+    if any(body.get(k) in (None, "") for k in keys):
+        return {"configured": False}
+    mass = float(body["weight_kg"])
+    height = float(body["height_cm"])
+    age = float(body["age"])
+    bmr = 10 * mass + 6.25 * height - 5 * age + (5 if body["sex"] == "male" else -161)
+    factor = float(body["protein_g_per_kg"][body["goal"]])
+    return dict(
+        configured=True,
+        bmr=round(bmr),
+        maintenance=round(bmr * float(body["activity_multiplier"])),
+        protein_g=round(mass * factor),
+    )
+
+
+def normalize_body(payload, mapping):
+    if "streams" in mapping:
+        if not isinstance(mapping["streams"], list):
+            raise ValueError("Mapping streams must be a list")
+        return [
+            record
+            for stream in mapping["streams"]
+            for record in normalize_body(payload, stream)
+        ]
+
+    def get(obj, path):
+        if path in ("", None, "$"):
+            return obj
+        for part in path.removeprefix("$.").split("."):
+            obj = obj[int(part)] if isinstance(obj, list) else obj[part]
+        return obj
+
+    records = get(payload, mapping.get("records_path", ""))
+    if not isinstance(records, list):
+        records = [records]
+    result = []
+    for row in records:
+        record = {}
+        for key, spec in mapping["fields"].items():
+            record[key] = (
+                spec["constant"]
+                if isinstance(spec, dict) and "constant" in spec
+                else get(row, spec["path"] if isinstance(spec, dict) else spec)
+            )
+        record["value"] = float(record["value"]) * float(
+            mapping.get("value_multiplier", 1)
+        )
+        if mapping.get("timestamp_format") in ("unix_seconds", "unix_milliseconds"):
+            divisor = 1000 if mapping["timestamp_format"] == "unix_milliseconds" else 1
+            record["recorded_at"] = datetime.fromtimestamp(
+                float(record["recorded_at"]) / divisor, timezone.utc
+            ).isoformat()
+        result.append(record)
+    return result
+
+
+def calendar_occurrences(events, start, end):
+    """Expand only in memory; persisted rows are masters plus explicit exceptions."""
+    out = []
+    active_masters = {
+        str(e["id"]) for e in events if not e["master_id"] and not e["deleted_at"]
+    }
+    exceptions = {
+        (str(e["master_id"]), e["original_start"]): e
+        for e in events
+        if e["master_id"] and str(e["master_id"]) in active_masters
+    }
+    for event in events:
+        if event["master_id"] or event["deleted_at"]:
+            continue
+        duration = event["ends_at"] - event["starts_at"]
+        if event["recurrence"]:
+            rule = rrulestr(
+                "\n".join(event["recurrence"]),
+                dtstart=event["starts_at"].astimezone(ZoneInfo(event["timezone"])),
+                forceset=True,
+            )
+            # xafter is lazy and bounded, avoiding a list explosion from dense rules.
+            dates = []
+            for occurrence in rule.xafter(start - duration, count=2000, inc=True):
+                if occurrence >= end:
+                    break
+                dates.append(occurrence)
+        else:
+            dates = [event["starts_at"]]
+        for occurrence in dates:
+            if (str(event["id"]), occurrence) in exceptions:
+                continue
+            finish = occurrence + duration
+            if occurrence < end and finish > start:
+                out.append(
+                    {
+                        **event,
+                        "starts_at": occurrence,
+                        "ends_at": finish,
+                        "occurrence_start": occurrence,
+                        "kind": "event",
+                    }
+                )
+    for e in exceptions.values():
+        if not e["deleted_at"] and e["starts_at"] < end and e["ends_at"] > start:
+            out.append({**e, "kind": "event"})
+    return out
