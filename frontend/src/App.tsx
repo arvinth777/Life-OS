@@ -41,6 +41,7 @@ import {
 } from "./screens";
 import { DSA } from "./dsa";
 import { Physical } from "./physical";
+import { VoxelScene } from "./VoxelScene";
 const navigation = [
   ["home", "Today", Home],
   ["journal", "Journal", BookOpen],
@@ -202,7 +203,7 @@ export default function App() {
           <span className="topbar-note">A day at a time</span>
         </div>
         <main id="main" tabIndex={-1}>
-          <header className="page-head">
+          <header className="page-head" key={`header-${page}`}>
             <div>
               <div className="eyebrow">
                 {page === "home"
@@ -233,7 +234,7 @@ export default function App() {
           ) : !loaded ? (
             <p role="status">Opening your workspace…</p>
           ) : (
-            <>
+            <div className="page-content" key={`content-${page}`}>
               {page === "home" ? (
                 <Today {...props} onQuick={setQuick} />
               ) : page === "journal" ? (
@@ -255,7 +256,7 @@ export default function App() {
               ) : (
                 <SettingsPage {...props} />
               )}
-            </>
+            </div>
           )}
           {quick && (
             <Editor
@@ -297,7 +298,7 @@ function Login({ onLogin }: any) {
     }
   }
   return (
-    <div className="login-page">
+    <main className="login-page">
       <div className="login-intro">
         <span className="eyebrow">YOUR PERSONAL WORKSPACE</span>
         <h1>
@@ -308,6 +309,7 @@ function Login({ onLogin }: any) {
           <br />
           you’re working on.
         </p>
+        <VoxelScene />
         <div className="login-index">
           Reflect <span>01</span>
           <br />
@@ -375,7 +377,7 @@ function Login({ onLogin }: any) {
           Your entries stay in your database. No account registration.
         </small>
       </section>
-    </div>
+    </main>
   );
 }
 function Today({ refresh, onRefresh, navigate, onQuick }: any) {
@@ -540,7 +542,7 @@ function Today({ refresh, onRefresh, navigate, onQuick }: any) {
         <div>
           <section className="learning-note">
             <span className="eyebrow">A LITTLE PRACTICE</span>
-            <Code2 size={30} />
+            <VoxelScene compact />
             <h2>
               Build understanding,
               <br />

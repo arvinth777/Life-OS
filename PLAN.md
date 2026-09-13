@@ -148,3 +148,7 @@ The Python API is prepared for Vercel Hobby; the React frontend stays on Sites a
 Migration `0002` adds the `backup_transfers` table with UUID primary key; owner foreign key with cascading deletion; direction constrained to upload/download; size constrained to 1–25,000,000 bytes; SHA-256 checksum; encrypted JSON chunk map; creation/update/expiry timestamps; and indexes on owner and timestamps. It is included in the full CSV/JSON backup schema and accessed only through owner-authenticated transfer endpoints. One active transfer is permitted at a time. The download captures every table before creating its own transport row. Chunk size is 1 MB. Abandoned transfers expire after one hour and are removed on the next transfer request. Restore validates the assembled archive and applies it in one transaction. Revision 0001 archives remain compatible.
 
 Additional dependency risk: Vercel enforces payload, execution-time and monthly usage limits. Small chunk requests address the payload limit, while bounded synchronous actions retain the existing request-driven architecture. Free-limit exhaustion can pause service; the documented Render alternative and local setup remain available. No paid plan, persistent worker or additional storage provider is introduced.
+
+## September 14 visual refresh
+
+The pixel/voxel design audit, one-line decisions, motion behavior, and verification are documented in [Design refresh](docs/DESIGN_REFRESH.md). Module contracts, data semantics, and the free hosting architecture are unchanged.
