@@ -78,7 +78,7 @@ try:
     login_url = None
     print('Samsung sign-in window opened. Waiting for you to complete sign-in there.', flush=True)
     done.wait(900)
-    print('Samsung account connected to Life OS.' if outcome['ok'] else 'Samsung sign-in was not completed (' + outcome['reason'] + '). Run the helper again to retry.', flush=True)
+    print('Samsung account connected to Life OS.' if outcome['ok'] else 'Samsung connection needs attention (' + outcome['reason'] + '). Return to Life OS for the next step.', flush=True)
 finally:
     server.shutdown() if 'thread' in locals() else None
     server.server_close()

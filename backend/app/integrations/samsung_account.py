@@ -7,6 +7,7 @@ import secrets
 import time
 import urllib.parse
 import uuid
+import re
 from pathlib import Path
 from typing import Any
 
@@ -93,7 +94,12 @@ def _trusted_auth_server_url(value: str) -> str:
         or parsed.query
         or parsed.fragment
     ):
-        raise AuthenticationError("Samsung returned an untrusted authentication server")
+        error = AuthenticationError("Samsung returned an untrusted authentication server")
+        # Only public authority diagnostics; never include the callback, code,
+        # username, query, or an arbitrary provider response in an error.
+        diagnostic_host = host or (value if re.fullmatch(r"[a-zA-Z0-9.-]{1,253}", value) else "")
+        error.authority = {"host": diagnostic_host, "scheme": parsed.scheme if parsed.scheme in ("http", "https", "") else "other", "path_present": bool(parsed.path and parsed.path != "/"), "query_present": bool(parsed.query), "userinfo_present": bool(parsed.username or parsed.password)}
+        raise error
     return f"https://{host}"
 
 

@@ -227,6 +227,34 @@ def test_samsung_sign_in_encrypted_roundtrip_and_callback_replay(client):
     assert str(calls[1].url) == "https://synthetic.samsungosp.com/auth/oauth2/authenticate"
 
 
+def test_samsung_callback_recovery_is_encrypted_and_expires(client, monkeypatch):
+    import time
+    from samsung_health_cloud.constants import REDIRECT_URI
+    from app.integrations.samsung_account import AccountBootstrap
+    from app.integrations.samsung_storage import SecretSlot, write_json, read_json
+    callback = REDIRECT_URI + "?code=private-recovery-code"
+    with engine.begin() as conn:
+        write_json(SecretSlot(conn, "samsung_pending"), {"created_at": time.time()})
+    def fail(self, value):
+        assert value == callback
+        raise ValueError("Samsung returned an untrusted authentication server")
+    monkeypatch.setattr(AccountBootstrap, "complete", fail)
+    r = client.post("/api/integrations/samsung/auth/finish", json={"callback": callback})
+    assert r.status_code == 400 and r.json()["detail"]["reason"] == "unexpected_provider"
+    with engine.connect() as conn:
+        assert read_json(SecretSlot(conn, "samsung_callback"))["callback"] == callback
+        encrypted = conn.execute(sa.select(s.secrets.c.ciphertext).where(s.secrets.c.name == "samsung_callback")).scalar_one()
+        assert "private-recovery-code" not in encrypted
+    monkeypatch.setattr(AccountBootstrap, "complete", lambda self, value: {"authenticated": value == callback})
+    assert client.post("/api/integrations/samsung/auth/retry").json()["authenticated"] is True
+    assert client.post("/api/integrations/samsung/auth/retry").status_code == 409
+    with engine.begin() as conn:
+        write_json(SecretSlot(conn, "samsung_callback"), {"callback": callback, "created_at": time.time() - 901})
+    assert client.post("/api/integrations/samsung/auth/retry").json()["detail"]["reason"] == "expired"
+    with engine.connect() as conn:
+        assert not SecretSlot(conn, "samsung_callback").exists()
+
+
 def test_samsung_cloud_page_resumes_and_raw_stress_is_not_interpreted(client, monkeypatch):
     from app.services import setting
     from app.integrations.samsung_session import SamsungHealthService

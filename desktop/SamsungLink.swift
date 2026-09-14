@@ -35,8 +35,9 @@ class Delegate: NSObject, NSApplicationDelegate {
         URLSession.shared.dataTask(with: request) { _, response, _ in
             DispatchQueue.main.async {
                 let alert = NSAlert()
-                alert.messageText = (response as? HTTPURLResponse)?.statusCode == 200 ? "Samsung sign-in completed" : "Samsung sign-in needs another attempt"
-                alert.informativeText = "Return to Life OS. You do not need to copy any login code."
+                let connected = (response as? HTTPURLResponse)?.statusCode == 200
+                alert.messageText = connected ? "Samsung sign-in completed" : "Life OS could not finish the connection"
+                alert.informativeText = connected ? "Return to Life OS to import your readings." : "Your sign-in reached Life OS, but the connection needs attention. Click OK and return to Life OS. Do not change your password or repeat sign-in yet."
                 alert.runModal()
                 NSApp.terminate(nil)
             }

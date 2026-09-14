@@ -12,6 +12,7 @@ from importlib.resources import files
 import httpx
 import sqlalchemy as sa
 from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from ..db import engine
 from .. import schema as s
 from ..security import owner, get_secret
@@ -36,6 +37,7 @@ def start(payload: dict = Body(default={})):
         with engine.begin() as conn:
             if not lock(conn):
                 raise HTTPException(409, "A Samsung request is already running")
+            secure_unlink(SecretSlot(conn, "samsung_callback"))
             with AccountBootstrap(conn=conn) as auth:
                 return {"login_url": auth.start(country=country), "expires_in": 900}
     except HTTPException:
@@ -44,30 +46,55 @@ def start(payload: dict = Body(default={})):
         raise HTTPException(502, "Samsung sign-in could not start. Try again later.") from None
 
 
+def finish_error(exc):
+    message = str(exc).lower()
+    reason = "unexpected_response"
+    for phrase, code in (("expired", "expired"), ("missing or duplicates", "incomplete_callback"), ("decrypt", "invalid_callback"), ("callback target", "unexpected_callback"), ("network request failed", "provider_unreachable"), ("failed with http", "provider_rejected"), ("untrusted", "unexpected_provider"), ("omitted master", "missing_credentials")):
+        if phrase in message:
+            reason = code
+            break
+    detail = {"message": "Samsung sign-in did not complete", "reason": reason}
+    if getattr(exc, "authority", None):
+        detail["authority"] = exc.authority
+    return JSONResponse(status_code=400, content={"detail": detail})
+
+
 @router.post("/auth/finish")
 def finish(payload: dict = Body(...)):
     from .samsung_account import AccountBootstrap
-    try:
-        with engine.begin() as conn:
-            if not lock(conn):
-                raise HTTPException(409, "A Samsung request is already running")
-            with AccountBootstrap(conn=conn) as auth:
-                result = auth.complete(payload.get("callback", ""))
-            secure_unlink(SecretSlot(conn, "samsung_cursor"))
-            secure_unlink(SecretSlot(conn, "samsung_session"))
-            setting(conn, "samsung_cloud", {"enabled": True, "interval_minutes": 60})
-            return result
-    except HTTPException:
-        raise
-    except Exception as exc:
-        # Classify known failures without returning callback data or provider bodies.
-        message = str(exc).lower()
-        reason = "unexpected_response"
-        for phrase, code in (("expired", "expired"), ("missing or duplicates", "incomplete_callback"), ("decrypt", "invalid_callback"), ("callback target", "unexpected_callback"), ("network request failed", "provider_unreachable"), ("failed with http", "provider_rejected"), ("untrusted", "unexpected_provider"), ("omitted master", "missing_credentials")):
-            if phrase in message:
-                reason = code
-                break
-        raise HTTPException(400, {"message": "Samsung sign-in did not complete", "reason": reason}) from None
+    from samsung_health_cloud.capture_redirect import is_expected_redirect_uri
+    callback = payload.get("callback", "")
+    with engine.begin() as conn:
+        if not lock(conn):
+            raise HTTPException(409, "A Samsung request is already running")
+        with AccountBootstrap(conn=conn) as auth:
+            try:
+                result = auth.complete(callback)
+            except Exception as exc:
+                # Keep a valid callback encrypted for a short-lived retry; this
+                # avoids asking the owner to sign in again during a repair.
+                if isinstance(callback, str) and len(callback) < 50000 and is_expected_redirect_uri(callback) and SecretSlot(conn, "samsung_pending").exists():
+                    write_json(SecretSlot(conn, "samsung_callback"), {"callback": callback, "created_at": time.time()})
+                else:
+                    secure_unlink(SecretSlot(conn, "samsung_callback"))
+                return finish_error(exc)
+        for name in ("samsung_cursor", "samsung_session", "samsung_callback"):
+            secure_unlink(SecretSlot(conn, name))
+        setting(conn, "samsung_cloud", {"enabled": True, "interval_minutes": 60})
+        return result
+
+
+@router.post("/auth/retry")
+def retry_finish():
+    with engine.begin() as conn:
+        slot = SecretSlot(conn, "samsung_callback")
+        if not slot.exists():
+            raise HTTPException(409, "No pending callback; start Samsung sign-in")
+        cached = read_json(slot)
+        if time.time() - cached.get("created_at", 0) > 900:
+            secure_unlink(slot)
+            return JSONResponse(status_code=400, content={"detail": {"reason": "expired"}})
+    return finish({"callback": cached["callback"]})
 
 
 @router.post("/disconnect")
@@ -75,7 +102,7 @@ def disconnect():
     with engine.begin() as conn:
         if not lock(conn):
             raise HTTPException(409, "A Samsung request is already running")
-        for name in ("samsung_master", "samsung_pending", "samsung_session", "samsung_cursor"):
+        for name in ("samsung_master", "samsung_pending", "samsung_session", "samsung_cursor", "samsung_callback"):
             secure_unlink(SecretSlot(conn, name))
         setting(conn, "samsung_cloud", {"enabled": False, "interval_minutes": 60})
     return {"connected": False}
