@@ -39,13 +39,30 @@ UNITS = {
     "hrv": "ms",
     "stress": "score",
     "body_fat": "percent",
+    "resting_heart_rate": "bpm",
+    "oxygen_saturation": "percent",
+    "respiratory_rate": "breaths/min",
+    "distance": "m",
+    "active_calories": "kcal",
+    "total_calories": "kcal",
+    "body_temperature": "C",
+    "skin_temperature_delta": "C",
+    "lean_body_mass": "kg",
+    "body_water_mass": "kg",
+    "bone_mass": "kg",
+    "vo2_max": "ml/kg/min",
+    "basal_metabolic_rate": "W",
+    "blood_pressure_systolic": "mmHg",
+    "blood_pressure_diastolic": "mmHg",
+    "blood_glucose": "mmol/L",
 }
 
 
 def ingest(conn, records, manual=False):
-    if not isinstance(records, list) or not 1 <= len(records) <= 5000:
-        raise ValueError("Supply 1–5000 health records")
+    if not isinstance(records, list) or not 1 <= len(records) <= 25000:
+        raise ValueError("Supply 1–25000 health records; shorten the phone sync range for larger imports")
     normalized = []
+    cfg = config(conn)
     for record in records:
         required = {
             "metric",
@@ -67,7 +84,7 @@ def ingest(conn, records, manual=False):
         ):
             raise ValueError("Health text fields cannot be empty")
         r["value"] = float(r["value"])
-        if not math.isfinite(r["value"]) or r["value"] < 0:
+        if not math.isfinite(r["value"]) or (r["value"] < 0 and r["metric"] not in {"skin_temperature_delta", "body_temperature"} and not (r["source"] == "samsung-cloud" and r["metric"].startswith("samsung_raw/") and r["unit"] == "raw")):
             raise ValueError("Health value must be finite and nonnegative")
         if r["metric"] in UNITS and r["unit"] != UNITS[r["metric"]]:
             raise ValueError(
@@ -75,31 +92,32 @@ def ingest(conn, records, manual=False):
             )
         if manual and r["source"] != "manual":
             raise ValueError("Manual entries must use source=manual")
+        if manual and r["metric"] == "water" and cfg.get("water_source") == "samsung_health":
+            raise ValueError("Water is tracked in Samsung Health. Change the water source in Settings to enter it here.")
         normalized.append(r)
     accepted = 0
-    body = config(conn).get("body", {})
-    for r in normalized:
-        ident = conn.execute(
+    body = cfg.get("body", {})
+    for start in range(0, len(normalized), 500):
+        inserted = conn.execute(
             pg_insert(s.health_records)
-            .values(**r)
+            .values(normalized[start:start + 500])
             .on_conflict_do_nothing(
                 index_elements=[
                     s.health_records.c.source,
                     s.health_records.c.external_id,
                 ]
             )
-            .returning(s.health_records.c.id)
-        ).scalar_one_or_none()
-        if not ident:
-            continue
-        accepted += 1
-        key = {"weight": "weight_kg", "height": "height_cm"}.get(r["metric"])
-        if r["source"] != "manual" and key and body.get(key) != r["value"]:
-            conn.execute(
-                sa.insert(s.metric_suggestions).values(
-                    record_id=ident, setting_key=key, proposed_value=r["value"]
+            .returning(s.health_records.c.id, s.health_records.c.metric, s.health_records.c.value, s.health_records.c.source)
+        ).mappings()
+        for r in inserted:
+            accepted += 1
+            key = {"weight": "weight_kg", "height": "height_cm"}.get(r["metric"])
+            if r["source"] != "manual" and key and body.get(key) != r["value"]:
+                conn.execute(
+                    sa.insert(s.metric_suggestions).values(
+                        record_id=r["id"], setting_key=key, proposed_value=r["value"]
+                    )
                 )
-            )
     return {"accepted": accepted, "duplicates": len(records) - accepted}
 
 
@@ -128,10 +146,17 @@ def dashboard(conn, at=None):
         name: streak([d for kind in kinds for d in source[kind]], zone, at)
         for name, kinds in definitions.items()
     }
-    metrics = {}
-    for r in rows(conn, "health_records"):
-        if local(r["recorded_at"]) == today:
-            metrics[r["metric"]] = metrics.get(r["metric"], 0) + r["value"]
+    start = datetime.combine(today, datetime.min.time(), tzinfo=tz)
+    end = start + timedelta(days=1)
+    health = s.health_records
+    source_filter = sa.true() if cfg.get("water_source") != "samsung_health" else sa.or_(health.c.metric != "water", health.c.source == "hc-webhook-samsung-water")
+    # Watch history can be large. Fetch only daily additive totals, never the
+    # complete sensor history or a nonsensical sum of heart-rate samples.
+    metrics = dict(conn.execute(sa.select(health.c.metric, sa.func.sum(health.c.value)).where(
+        health.c.metric.in_(["water", "steps", "sleep", "activity"]),
+        health.c.recorded_at >= start, health.c.recorded_at < end, source_filter,
+    ).group_by(health.c.metric)).all())
+    water_received_at = conn.execute(sa.select(sa.func.max(health.c.created_at)).where(health.c.metric == "water", source_filter)).scalar()
     tasks = [
         r
         for r in rows(conn, "tasks")
@@ -145,6 +170,8 @@ def dashboard(conn, at=None):
         "timezone": zone,
         "streaks": streaks,
         "metrics": metrics,
+        "water_source": cfg.get("water_source", "manual"),
+        "water_received_at": water_received_at,
         "tasks": sorted(tasks, key=lambda r: (-r["priority"], r["due_at"])),
         "agenda": sorted(agenda, key=lambda r: r["starts_at"]),
         "nutrition": nutrition(cfg.get("body", {})),

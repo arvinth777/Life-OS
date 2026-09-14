@@ -1,4 +1,6 @@
 import uuid
+import json
+from pathlib import Path
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert
 from .db import engine
@@ -21,6 +23,8 @@ def seed():
         defaults = {
             "timezone": "UTC",
             "water_goal_ml": 2000,
+            "water_source": "manual",
+            "samsung_cloud": {"enabled": False, "interval_minutes": 60},
             "steps_goal": 8000,
             "accuracy_threshold": 0.6,
             "streaks": {
@@ -284,6 +288,15 @@ def seed():
             "mapping/default",
             name="default",
             mapping=mapping,
+        )
+        add(
+            conn,
+            s.ingestion_mappings,
+            "mapping/hc-webhook-samsung",
+            name="hc-webhook-samsung",
+            mapping=json.loads(
+                (Path(__file__).parent / "data/hc_webhook_v1_9_20.json").read_text()
+            ),
         )
 
 

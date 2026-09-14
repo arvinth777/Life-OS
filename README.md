@@ -84,7 +84,7 @@ All entered times use the browser's timezone (identified beside date-time contro
 | `PORT` | Host-provided API port, usually automatic. |
 | `VITE_API_URL` | Optional frontend build-time API origin. Alternatively set the API connection on the sign-in screen; this stores only its URL locally. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Reserved for Phase 2 OAuth transport. Setting them does **not** activate Google sync in this version. |
-| `SAMSUNG_SYNC_ENABLED` | Optional Phase 3 flag, default false. True reports not implemented; it does not silently import an unstable client. |
+| Samsung cloud | No additional environment secret is required. `settings.samsung_cloud.enabled` defaults false; successful Samsung sign-in enables it. All private state uses `ENCRYPTION_KEY`. |
 | `OPEN_WEARABLES_URL`, `OPEN_WEARABLES_API_KEY` | Reserved for an optional companion route; not consumed by this Phase 1 build. |
 
 Settings → Connections & AI accepts an LLM provider key, a health bridge bearer token, and a digest trigger token. They are encrypted in `secrets`, never exposed by normal table endpoints. Empty removal revokes the configured secret. The shared inference adapter currently supports OpenAI; the model is editable in advanced `llm` settings. No LLM account/key is bundled and no call runs without an explicit feedback/tutor action. External inference is optional and may have provider charges; the app requires no paid tooling to operate manually.
@@ -155,3 +155,15 @@ The first output is `ENCRYPTION_KEY`; the second is `OWNER_PASSWORD_HASH`. Save 
 ## Scheduled work
 
 In-app reminders evaluate when the app opens and through authenticated `POST /api/digest`. Configure a long random digest token in Settings if an external scheduler will call it. No scheduler is required: the next app load catches up. No push notifications, email delivery, persistent background worker, or guarantee of work while the app is closed. Google polling and webhook channel transport are Phase 2 work, not simulated schedules.
+
+## Samsung account sign-in for private fields
+
+The phone bridge is configured separately using [PHONE_SETUP.md](docs/PHONE_SETUP.md). To connect Samsung Cloud for its additional raw numeric fields on macOS, install Xcode Command Line Tools if absent, then run from the repository root:
+
+```bash
+backend/.venv/bin/python scripts/connect-samsung.py --api https://YOUR_API_HOST
+```
+
+Enter your Life OS owner password at the private terminal prompt, then sign in on Samsung's page. Do not paste Samsung callback URLs, passwords, or tokens into chat. `--country` changes the Samsung page's two-letter country (the upstream default is `us`). The script creates a small native callback helper beside the checkout, waits up to 15 minutes, deletes its temporary session file, and signs out its temporary Life OS session. It does not run continuously. Linux/Windows callback helpers are not supplied in this version.
+
+After success, open Physical goals → Watch data → Import / resume Samsung history. Pause and resume between batches; later app loads run bounded catch-up work. Settings → Connections & AI can disconnect the Samsung account without deleting imported readings. The private protocol may stop working; unknown fields stay labeled raw, and a successful sign-in alone does not verify metric coverage. See [INTEGRATIONS.md](docs/INTEGRATIONS.md) for exact exclusions and limits.

@@ -28,12 +28,10 @@ export default function Preferences({ refresh, onRefresh }: any) {
     setBusy(true);
     setError("");
     try {
-      for (const row of records) {
-        if (JSON.stringify(cfg[row.key]) !== JSON.stringify(row.value))
-          await api("/data/settings/" + row.id, "PATCH", {
-            key: row.key,
-            value: cfg[row.key],
-          });
+      for (const [key, value] of Object.entries(cfg)) {
+        const row = records.find((r) => r.key === key);
+        if (!row || JSON.stringify(value) !== JSON.stringify(row.value))
+          await api("/data/settings" + (row ? "/" + row.id : ""), row ? "PATCH" : "POST", { key, value });
       }
       setSaved(true);
       savedFeedback("Preferences saved");
@@ -71,6 +69,13 @@ export default function Preferences({ refresh, onRefresh }: any) {
                 set("accuracy_threshold", Number(e.target.value) / 100)
               }
             />
+          </label>
+          <label>
+            Water source
+            <select value={cfg.water_source || "manual"} onChange={(e) => set("water_source", e.target.value)}>
+              <option value="manual">Life OS manual entry</option>
+              <option value="samsung_health">Samsung Health only</option>
+            </select>
           </label>
           <label>
             Daily water goal (ml)

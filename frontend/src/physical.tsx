@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Plus, Droplets, Check, X } from "lucide-react";
 import { api, fmt, title, localInput } from "./api";
 import {
@@ -23,6 +23,7 @@ export function Physical(p: any) {
   const [health, setHealth] = useState(false);
   const [reminders, setReminders] = useState<any[]>([]);
   const [error, setError] = useState("");
+  const samsungWater = p.settings?.water_source === "samsung_health";
   useEffect(() => {
     Promise.all([
       api("/dashboard"),
@@ -54,6 +55,7 @@ export function Physical(p: any) {
         onChange={setTab}
         items={[
           ["overview", "Today & training"],
+          ["watch", "Watch data"],
           ["workouts", "Workouts"],
           ["sets", "Sets"],
           ["health", "Health records"],
@@ -66,6 +68,8 @@ export function Physical(p: any) {
           <div className="daily-health">
             <div>
               <WaterTracker
+                samsungOnly={samsungWater}
+                receivedAt={data?.water_received_at}
                 total={data ? (data.metrics.water || 0) : undefined}
                 goal={Number(p.settings?.water_goal_ml) || 2000}
                 refresh={async () => { setData(await api("/dashboard")); }}
@@ -201,6 +205,8 @@ export function Physical(p: any) {
               </div>
             ))}
         </>
+      ) : tab === "watch" ? (
+        <WatchReadings refresh={p.refresh} />
       ) : tab === "health" ? (
         <>
           <button className="primary" onClick={() => setHealth(true)}>
@@ -257,15 +263,68 @@ export function Physical(p: any) {
         />
       )}
       {health && (
-        <HealthEntry onClose={() => setHealth(false)} onSaved={p.onRefresh} />
+        <HealthEntry samsungWater={samsungWater} onClose={() => setHealth(false)} onSaved={p.onRefresh} />
       )}
     </>
   );
 }
-function HealthEntry({ onClose, onSaved }: any) {
-  const [metric, setMetric] = useState("water");
-  const [value, setValue] = useState("250");
-  const [unit, setUnit] = useState("ml");
+function WatchReadings({ refresh }: any) {
+  const [data, setData] = useState<any>();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState("");
+  const stop = useRef(false);
+  async function load() {
+    setBusy(true); setError("");
+    try { setData(await api("/physical/readings")); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { load(); return () => { stop.current = true; }; }, [refresh]);
+  async function importCloud() {
+    stop.current = false; setImporting(true); setError("");
+    let received = 0;
+    try {
+      while (!stop.current) {
+        const result = await api("/integrations/samsung/pull", "POST");
+        received += result.accepted || 0;
+        setProgress(`${received.toLocaleString()} readings received. ${result.message}`);
+        await load();
+        if (!["running", "unavailable"].includes(result.state)) break;
+      }
+    } catch (e) { setError(e.message); }
+    finally { setImporting(false); }
+  }
+  const readings = Object.fromEntries((data?.readings || []).map((r: any) => [r.metric, r]));
+  return <Panel title="Samsung Health readings" action={<button onClick={load} disabled={busy}>{busy ? "Refreshing…" : "Refresh readings"}</button>}>
+    <p className="muted">Latest received readings. Availability depends on what Samsung Health shares with your phone bridge. Record history is in Health records.</p>
+    {data?.samsung_connected && <div className="form-actions">
+      <button onClick={importing ? () => { stop.current = true; } : importCloud}>{importing ? "Pause after this batch" : "Import / resume Samsung history"}</button>
+    </div>}
+    {progress && <p role="status">{progress}</p>}
+    {error && <p className="error" role="alert">{error}</p>}
+    {!data ? <p>Loading readings…</p> : <div className="table-wrap"><table>
+      <thead><tr><th>Reading</th><th>Latest value</th><th>Recorded</th></tr></thead>
+      <tbody>{data.supported.map((item: any) => {
+        const r: any = readings[item.metric];
+        return <tr key={item.metric}><td>{title(item.metric)}</td><td>{r ? `${Number(r.value).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${r.unit}` : "No data received"}</td><td>{r ? fmt(r.recorded_at) : "—"}</td></tr>;
+      })}<tr><td>Stress</td><td colSpan={2}>{data.samsung_connected ? "See Samsung raw fields below when available; scale not yet verified" : "Samsung cloud connection needed · Not connected"}</td></tr></tbody>
+    </table></div>}
+    {data?.readings.some((r: any) => r.metric.startsWith("samsung_raw/")) && <details open>
+      <summary>Samsung cloud · Raw fields</summary>
+      <p className="muted">These are Samsung’s numeric source fields. Their scales and meanings have not been verified. They do not change your daily totals or body settings.</p>
+      <div className="table-wrap"><table><thead><tr><th>Source field</th><th>Raw value</th><th>Recorded</th></tr></thead><tbody>
+        {data.readings.filter((r: any) => r.metric.startsWith("samsung_raw/")).map((r: any) => <tr key={r.metric}><td>{r.metric.replace("samsung_raw/", "").replaceAll("/", " · ")}</td><td>{r.value}</td><td>{fmt(r.recorded_at)}</td></tr>)}
+      </tbody></table></div>
+    </details>}
+  </Panel>;
+}
+
+function HealthEntry({ onClose, onSaved, samsungWater }: any) {
+  const [metric, setMetric] = useState(samsungWater ? "steps" : "water");
+  const [value, setValue] = useState(samsungWater ? "" : "250");
+  const [unit, setUnit] = useState(samsungWater ? "count" : "ml");
   const [recorded, setRecorded] = useState(localInput());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -318,7 +377,7 @@ function HealthEntry({ onClose, onSaved }: any) {
                 setUnit(units[e.target.value]);
               }}
             >
-              {Object.keys(units).map((k) => (
+              {Object.keys(units).filter((k) => !samsungWater || k !== "water").map((k) => (
                 <option key={k} value={k}>
                   {title(k)}
                 </option>

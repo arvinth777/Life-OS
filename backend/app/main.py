@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError, DataError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from fastapi import FastAPI, Depends, HTTPException, Request, Body
+from fastapi import FastAPI, Depends, HTTPException, Request, Body, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from .db import engine
@@ -36,8 +36,10 @@ from .backup import coerce, export_data, archive, parse_backup, restore, dumps
 
 app = FastAPI(title="Life OS", version="1.0.0")
 from .transfers import router as transfer_router
+from .integrations.samsung import router as samsung_router
 
 app.include_router(transfer_router)
+app.include_router(samsung_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(","),
@@ -238,7 +240,7 @@ def schema():
 
 
 @app.get("/api/data/{name}", dependencies=[Depends(owner)])
-def list_records(name: str, q: str = ""):
+def list_records(name: str, q: str = "", limit: int = Query(200, ge=1, le=1000), offset: int = Query(0, ge=0)):
     t = get_table(name)
     with engine.connect() as conn:
         query = sa.select(t)
@@ -250,9 +252,12 @@ def list_records(name: str, q: str = ""):
             query = query.where(
                 vector.op("@@")(sa.func.websearch_to_tsquery("english", q))
             )
+        query = query.order_by(t.c.created_at.desc(), t.c.id.desc())
+        if name == "health_records":
+            query = query.limit(limit).offset(offset)
         return [
             dict(r)
-            for r in conn.execute(query.order_by(t.c.created_at.desc())).mappings()
+            for r in conn.execute(query).mappings()
         ]
 
 
@@ -329,6 +334,8 @@ def validate(conn, name, payload, existing=None):
             not isinstance(val, (int, float)) or not 0 <= val <= 1
         ):
             raise ValueError("Accuracy threshold is between 0 and 1")
+        elif key == "water_source" and val not in ("manual", "samsung_health"):
+            raise ValueError("Choose manual or samsung_health for water source")
         elif key == "body":
             if not isinstance(val, dict):
                 raise ValueError("Body metrics must be an object")
@@ -504,6 +511,22 @@ def volume(workout_id: uuid.UUID | None = None, week: bool = False):
         return muscle_volume(conn, workout_id, week)
 
 
+@app.get("/api/physical/readings", dependencies=[Depends(owner)])
+def watch_readings():
+    t = s.health_records
+    with engine.connect() as conn:
+        latest = [dict(r) for r in conn.execute(
+            sa.select(t.c.metric, t.c.value, t.c.unit, t.c.recorded_at, t.c.created_at)
+            .where(sa.or_(t.c.source.startswith("hc-webhook-samsung-"), t.c.source == "samsung-cloud"))
+            .distinct(t.c.metric).order_by(t.c.metric, t.c.recorded_at.desc(), t.c.created_at.desc())
+        ).mappings()]
+        mapping = conn.execute(sa.select(s.ingestion_mappings.c.mapping).where(s.ingestion_mappings.c.name == "hc-webhook-samsung")).scalar_one_or_none()
+        connected = bool(get_secret(conn, "samsung_master"))
+    fields = (mapping or {}).get("streams", [])
+    supported = [{"metric": st["fields"]["metric"]["constant"], "unit": st["fields"]["unit"]["constant"]} for st in fields]
+    return {"readings": latest, "supported": supported, "samsung_connected": connected}
+
+
 @app.get("/api/calendar/agenda", dependencies=[Depends(owner)])
 def agenda(start: datetime, end: datetime):
     if (
@@ -647,6 +670,8 @@ def webhook(mapping_name: str, request: Request, payload=Body(...)):
             raise ValueError("Mapping does not match payload: " + str(exc))
         if any(r.get("source") == "manual" for r in normalized):
             raise ValueError("Bridge source must identify the bridge")
+        if not normalized:
+            return {"accepted": 0, "duplicates": 0}
         return ingest(conn, normalized)
 
 
@@ -712,7 +737,8 @@ def digest_run():
             )
         )
         result = reminders(conn)
-    return {"reminders": result, "calendar_sync": "deferred; use local calendar"}
+    from .integrations.samsung import pull
+    return {"reminders": result, "calendar_sync": "deferred; use local calendar", "samsung": pull()}
 
 
 @app.get("/api/backup", dependencies=[Depends(owner)])
@@ -769,8 +795,9 @@ def integration_status():
     return {
         "llm_configured": "llm_api_key" in names,
         "health_configured": "health_webhook_token" in names,
+        "samsung_connected": "samsung_master" in names,
         "google": "Phase 2 scaffold; live sync is not implemented",
-        "samsung": "Deferred; disabled by default",
+        "samsung": "Samsung account linked; private cloud import available" if "samsung_master" in names else "Samsung account sign-in needed for private cloud readings",
         "open_wearables": "Deferred; companion app not built",
         "input_tokens": sum(r["input_tokens"] for r in usage),
         "output_tokens": sum(r["output_tokens"] for r in usage),

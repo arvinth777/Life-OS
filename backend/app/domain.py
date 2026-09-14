@@ -1,6 +1,8 @@
 """Pure calculations; timestamps are instants and streak dates use the configured zone."""
 
 import math
+import hashlib
+import json
 from datetime import datetime, timedelta, timezone, date
 from zoneinfo import ZoneInfo
 from dateutil.rrule import rrulestr
@@ -92,13 +94,60 @@ def normalize_body(payload, mapping):
             obj = obj[int(part)] if isinstance(obj, list) else obj[part]
         return obj
 
-    records = get(payload, mapping.get("records_path", ""))
+    try:
+        records = get(payload, mapping.get("records_path", ""))
+    except KeyError:
+        # An optional stream may be absent in an incremental phone payload.
+        # Malformed present rows must still fail the entire batch below.
+        if mapping.get("optional", False):
+            return []
+        raise
     if not isinstance(records, list):
         records = [records]
+    if "children_path" in mapping:
+        expanded = []
+        for parent in records:
+            children = get(parent, mapping["children_path"])
+            if not isinstance(children, list):
+                raise ValueError("Child records must be an array")
+            expanded.extend({**parent, **child} for child in children)
+        records = expanded
     result = []
     for row in records:
+        conditions = mapping.get("where_all", []) + ([mapping["where"]] if mapping.get("where") else [])
+        if any(get(row, condition["path"]) != condition["equals"] for condition in conditions):
+            continue
+        if mapping.get("optional_value"):
+            try:
+                get(row, mapping["fields"]["value"]["path"])
+            except KeyError:
+                continue
         record = {}
         for key, spec in mapping["fields"].items():
+            if isinstance(spec, dict) and "first_present" in spec:
+                for path in spec["first_present"]:
+                    try:
+                        record[key] = get(row, path)
+                        break
+                    except KeyError:
+                        pass
+                else:
+                    raise ValueError("None of the configured reading fields is present")
+                continue
+            if isinstance(spec, dict) and "hash_paths" in spec:
+                paths = spec["hash_paths"]
+                if key != "external_id" or not isinstance(paths, list) or not paths:
+                    raise ValueError("hash_paths requires a nonempty external_id path list")
+                parts = [get(row, path) for path in paths]
+                if any(v is None or v == "" for v in parts):
+                    raise ValueError("Record identity fields cannot be empty")
+                # Legacy bridges omit native IDs. Hash only the configured stable
+                # identity fields, never the send time, value, or array position.
+                # Same-identity corrections remain duplicates under the ingestion
+                # contract; a changed identity cannot be recognized as an update.
+                identity = json.dumps(parts, sort_keys=True, separators=(",", ":"))
+                record[key] = "sha256:" + hashlib.sha256(identity.encode()).hexdigest()
+                continue
             record[key] = (
                 spec["constant"]
                 if isinstance(spec, dict) and "constant" in spec

@@ -1,6 +1,6 @@
 # Delivery status
 
-13 September 2026. This document separates running features from scaffolding. No integration is represented as live merely because a configuration field exists.
+14 September 2026. This document separates running features from scaffolding. No integration is represented as live merely because a configuration field exists.
 
 ## Phase 1
 
@@ -20,7 +20,7 @@ Live verification boundary: database migrations, seed counts and owner bootstrap
 | No external integrations required | Missing-key tutor/feedback states are disabled; every module remains navigable. Core route checks run without LLM or wearable configuration. |
 | Forward migrations require no manual SQL | Alembic 0001 creates the initial schema; 0002 adds encrypted backup transfers. Both are explicit forward migrations. Legacy 0001 backups remain restorable. |
 
-Verification: **15 backend acceptance tests passed** against PostgreSQL. The original end-to-end browser suite covered loaded module views at **320, 375, 414, 768 and 1440 px**; a new isolated browser test also passed for chunked backup download, restore and subsequent sign-in. A genuine mobile overflow from a table's hidden accessibility label was corrected before the original pass. The React production build passes. The original frontend runtime dependency audit reported zero advisories; dependencies have not changed. A harmless Starlette test-client deprecation warning remains; it does not fail tests.
+Verification: **22 backend acceptance tests passed** against PostgreSQL. The original end-to-end browser suite covered loaded module views at **320, 375, 414, 768 and 1440 px**; a new isolated browser test also passed for chunked backup download, restore and subsequent sign-in. A genuine mobile overflow from a table's hidden accessibility label was corrected before the original pass. The React production build passes. The original frontend runtime dependency audit reported zero advisories; dependencies have not changed. A harmless Starlette test-client deprecation warning remains; it does not fail tests.
 
 Visual inspection covered the loaded desktop dashboard, with a workbench layout, cobalt active controls, clearly separated tasks/agenda, and a functional reading surface. Browser geometry checks cover the mobile routes. No fake personal history is seeded. Temporary QA records are removed from the local workspace after tests.
 
@@ -28,11 +28,11 @@ Visual inspection covered the loaded desktop dashboard, with a workbench layout,
 
 | Route / feature | Actual state |
 |---|---|
-| Manual normalized ingestion | Wired, owner authenticated, atomic and idempotent, always available. |
+| Manual normalized ingestion | Wired, owner authenticated, atomic and idempotent. Water entry is disabled when the owner chooses Samsung-only water; fresh installs default to manual. |
 | Health Connect webhook | Receiver, separate bearer authentication, mapping editor/preview, nested-field normalization, multiple configured streams, dedupe and body-metric suggestions implemented. Tested synthetically, **not paired with a physical phone**. |
 | LLM journal/tutor | Shared OpenAI adapter, encrypted key, explicit actions, stored feedback/usage implemented. Disabled by default. **No live inference call tested**; no provider key provisioned. |
 | Google Calendar | Local calendar works. Schema, timestamp conflict resolver and detailed resumable-sync contract are scaffolded. **OAuth, incremental transport, two-way pushes, channel handling, and live polling are not implemented**. Settings cannot activate them yet. |
-| Samsung private cloud | Disabled feature-flag scaffold only; SDK not installed. Encrypted SDK token/cache adaptation, login and verified units deferred. |
+| Samsung private cloud | Pinned 0.7.1 client, encrypted account/session/cursor storage, macOS sign-in helper and bounded GET importer implemented. Synthetic auth/resume checks pass; real Samsung account and field units are not yet verified. |
 | Open Wearables | Decision/status scaffold only. No mobile companion, SDK pin, Wearables backend or MCP connection built. Deferred pending webhook insufficiency. |
 
 ## Explicit content stubs
@@ -41,11 +41,16 @@ Eight visibly incomplete lessons: Stacks and queues; Linked lists; Recursion fro
 
 ## Remaining limits
 
-- Complete production hosting needs the owner's managed Postgres project and Python API host setup. A published static frontend alone cannot save data until its API address is configured.
-- Remote deployment, long-term unattended operation, real Google accounts, actual bridge payloads/Android background delivery, and optional private Samsung APIs were not tested.
+- Vercel API deployment is Ready. Long-term unattended operation, real Google accounts, actual bridge payloads/Android background delivery and real Samsung Cloud retrieval remain unverified.
 - CSV files intentionally use JSON-encoded cells to preserve exact values. They are designed for lossless restore, not automatic spreadsheet-type guessing.
 - Health sum metrics expect nonoverlapping increments. The app cannot deduplicate overlapping readings from *different* sources using a contract that only keys by source and external ID. Select one active source per overlapping metric/window.
 - Most reference/admin data use consistent table editors; nested curriculum/mapping/recurrence data use documented JSON fields. Body metrics, grading bands and everyday actions have ordinary labeled controls.
 - On-demand reminders catch up when the app is opened; no promise of background delivery while it is closed.
 
 See [INTEGRATIONS.md](INTEGRATIONS.md) for all deferred Phase 2/3 work; nothing has been silently removed from the planned scope. Publication results are recorded separately in the task handoff.
+
+## Watch7 / S24 FE setup — 14 September 2026
+
+The receiver has a pinned 37-reading preset for the free HC Webhook v1.9.20 APK. Samsung-only water excludes old manual drinks without deleting them. Incremental missing arrays, source filtering, sleep stages, deterministic legacy identities and 6,001-record retries are tested. Dashboard totals use SQL; history pages stay bounded. All 22 backend acceptance checks pass on disposable Postgres, including encrypted Samsung sign-in/replay and resumable raw stress pages. The watch/water browser checks pass at 375, 768 and 1440 px, and the production React build passes. Swift callback helper compilation passes with a macOS deprecation warning.
+
+The live receiver token, Samsung mapping and Samsung-only water preference were configured through the authenticated API. The private header is delivered outside Git in WATCH_CONNECTION.md. Phone installation/permissions, Samsung sign-in and first real sync still need completion. No real health data was fabricated for live verification. The private importer excludes unsupported document structures; it does not claim a complete Samsung backup. The identity limits are documented in PHONE_SETUP.md and INTEGRATIONS.md. No paid plan, Android codebase or persistent worker was added.

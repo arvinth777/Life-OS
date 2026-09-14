@@ -354,10 +354,16 @@ export function Records({
   const [error, setError] = useState("");
   const [refs, setRefs] = useState<any>({});
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const paged = table === "health_records";
   useEffect(() => {
-    api("/data/" + table)
-      .then(setRecords)
-      .catch((e) => setError(e.message));
+    let active = true;
+    setLoading(true);
+    api("/data/" + table + (paged ? `?limit=200&offset=${page * 200}` : ""))
+      .then((r) => { if (active) { setRecords(r); setError(""); } })
+      .catch((e) => { if (active) setError(e.message); })
+      .finally(() => { if (active) setLoading(false); });
     const fs = schema[table]?.fields.filter((f: any) => f.ref) || [];
     Promise.all(
       [...new Set(fs.map((f: any) => f.ref))].map(async (n: string) => [
@@ -367,7 +373,8 @@ export function Records({
     )
       .then((r) => setRefs(Object.fromEntries(r)))
       .catch((e) => setError(e.message));
-  }, [table, refresh]);
+    return () => { active = false; };
+  }, [table, refresh, page]);
   const shown = filter ? records.filter(filter) : records;
   const names =
     columns ||
@@ -485,6 +492,11 @@ export function Records({
       ) : (
         <Empty text={"No " + title(table).toLowerCase() + " yet."} />
       )}
+      {paged && <div className="form-actions" aria-label="Health history pages">
+        <button disabled={loading || page === 0} onClick={() => setPage((n) => n - 1)}>Newer readings</button>
+        <span role="status">{loading ? "Loading…" : `Page ${page + 1}`}</span>
+        <button disabled={loading || records.length < 200} onClick={() => setPage((n) => n + 1)}>Older readings</button>
+      </div>}
       {edit !== undefined && (
         <Editor
           table={table}

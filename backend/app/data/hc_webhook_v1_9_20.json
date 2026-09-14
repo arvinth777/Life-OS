@@ -1,0 +1,1368 @@
+{
+  "streams": [
+    {
+      "records_path": "steps",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 1,
+      "fields": {
+        "metric": {
+          "constant": "steps"
+        },
+        "value": {
+          "path": "count"
+        },
+        "unit": {
+          "constant": "count"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-steps"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "sleep",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 0.0002777777777777778,
+      "fields": {
+        "metric": {
+          "constant": "sleep"
+        },
+        "value": {
+          "path": "duration_seconds"
+        },
+        "unit": {
+          "constant": "hours"
+        },
+        "recorded_at": {
+          "path": "session_end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-sleep"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "session_end_time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "exercise",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 0.016666666666666666,
+      "fields": {
+        "metric": {
+          "constant": "activity"
+        },
+        "value": {
+          "path": "duration_seconds"
+        },
+        "unit": {
+          "constant": "minutes"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-activity"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "type",
+            "start_time",
+            "end_time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "hydration",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 1000,
+      "fields": {
+        "metric": {
+          "constant": "water"
+        },
+        "value": {
+          "path": "liters"
+        },
+        "unit": {
+          "constant": "ml"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-water"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "weight",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 1,
+      "fields": {
+        "metric": {
+          "constant": "weight"
+        },
+        "value": {
+          "path": "kilograms"
+        },
+        "unit": {
+          "constant": "kg"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-weight"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "height",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 100,
+      "fields": {
+        "metric": {
+          "constant": "height"
+        },
+        "value": {
+          "path": "meters"
+        },
+        "unit": {
+          "constant": "cm"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-height"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "heart_rate",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "heart_rate"
+        },
+        "value": {
+          "first_present": [
+            "bpm",
+            "avg"
+          ]
+        },
+        "unit": {
+          "constant": "bpm"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-heart_rate"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "heart_rate_variability",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "hrv"
+        },
+        "value": {
+          "first_present": [
+            "rmssd_millis",
+            "avg"
+          ]
+        },
+        "unit": {
+          "constant": "ms"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-hrv"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "resting_heart_rate",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "resting_heart_rate"
+        },
+        "value": {
+          "path": "bpm"
+        },
+        "unit": {
+          "constant": "bpm"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-resting_heart_rate"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "oxygen_saturation",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "oxygen_saturation"
+        },
+        "value": {
+          "first_present": [
+            "percentage",
+            "avg"
+          ]
+        },
+        "unit": {
+          "constant": "percent"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-oxygen_saturation"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "respiratory_rate",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "respiratory_rate"
+        },
+        "value": {
+          "first_present": [
+            "rate",
+            "avg"
+          ]
+        },
+        "unit": {
+          "constant": "breaths/min"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-respiratory_rate"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "distance",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "distance"
+        },
+        "value": {
+          "path": "meters"
+        },
+        "unit": {
+          "constant": "m"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-distance"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "active_calories",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "active_calories"
+        },
+        "value": {
+          "path": "calories"
+        },
+        "unit": {
+          "constant": "kcal"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-active_calories"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "total_calories",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "total_calories"
+        },
+        "value": {
+          "path": "calories"
+        },
+        "unit": {
+          "constant": "kcal"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-total_calories"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "body_temperature",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "body_temperature"
+        },
+        "value": {
+          "path": "celsius"
+        },
+        "unit": {
+          "constant": "C"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-body_temperature"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "skin_temperature",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "skin_temperature_delta"
+        },
+        "value": {
+          "first_present": [
+            "delta_celsius",
+            "avg_delta_celsius"
+          ]
+        },
+        "unit": {
+          "constant": "C"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-skin_temperature_delta"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "body_fat",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "body_fat"
+        },
+        "value": {
+          "path": "percentage"
+        },
+        "unit": {
+          "constant": "percent"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-body_fat"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "lean_body_mass",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "lean_body_mass"
+        },
+        "value": {
+          "path": "kilograms"
+        },
+        "unit": {
+          "constant": "kg"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-lean_body_mass"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "body_water_mass",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "body_water_mass"
+        },
+        "value": {
+          "path": "kilograms"
+        },
+        "unit": {
+          "constant": "kg"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-body_water_mass"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "bone_mass",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "bone_mass"
+        },
+        "value": {
+          "path": "kilograms"
+        },
+        "unit": {
+          "constant": "kg"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-bone_mass"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "vo2_max",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "vo2_max"
+        },
+        "value": {
+          "path": "ml_per_kg_per_min"
+        },
+        "unit": {
+          "constant": "ml/kg/min"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-vo2_max"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "basal_metabolic_rate",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "basal_metabolic_rate"
+        },
+        "value": {
+          "path": "watts"
+        },
+        "unit": {
+          "constant": "W"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-basal_metabolic_rate"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "blood_pressure",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "blood_pressure_systolic"
+        },
+        "value": {
+          "path": "systolic"
+        },
+        "unit": {
+          "constant": "mmHg"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-blood_pressure_systolic"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "blood_pressure",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "blood_pressure_diastolic"
+        },
+        "value": {
+          "path": "diastolic"
+        },
+        "unit": {
+          "constant": "mmHg"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-blood_pressure_diastolic"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "blood_glucose",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "blood_glucose"
+        },
+        "value": {
+          "path": "mmol_per_liter"
+        },
+        "unit": {
+          "constant": "mmol/L"
+        },
+        "recorded_at": {
+          "path": "time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-blood_glucose"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "time"
+          ]
+        }
+      }
+    },
+    {
+      "records_path": "sleep",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 0.016666666666666666,
+      "fields": {
+        "metric": {
+          "constant": "sleep_unknown"
+        },
+        "value": {
+          "path": "duration_seconds"
+        },
+        "unit": {
+          "constant": "minutes"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-sleep_unknown"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "children_path": "stages",
+      "where_all": [
+        {
+          "path": "stage",
+          "equals": "0"
+        }
+      ]
+    },
+    {
+      "records_path": "sleep",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 0.016666666666666666,
+      "fields": {
+        "metric": {
+          "constant": "sleep_awake"
+        },
+        "value": {
+          "path": "duration_seconds"
+        },
+        "unit": {
+          "constant": "minutes"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-sleep_awake"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "children_path": "stages",
+      "where_all": [
+        {
+          "path": "stage",
+          "equals": "1"
+        }
+      ]
+    },
+    {
+      "records_path": "sleep",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 0.016666666666666666,
+      "fields": {
+        "metric": {
+          "constant": "sleep_unspecified"
+        },
+        "value": {
+          "path": "duration_seconds"
+        },
+        "unit": {
+          "constant": "minutes"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-sleep_unspecified"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "children_path": "stages",
+      "where_all": [
+        {
+          "path": "stage",
+          "equals": "2"
+        }
+      ]
+    },
+    {
+      "records_path": "sleep",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 0.016666666666666666,
+      "fields": {
+        "metric": {
+          "constant": "sleep_out_of_bed"
+        },
+        "value": {
+          "path": "duration_seconds"
+        },
+        "unit": {
+          "constant": "minutes"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-sleep_out_of_bed"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "children_path": "stages",
+      "where_all": [
+        {
+          "path": "stage",
+          "equals": "3"
+        }
+      ]
+    },
+    {
+      "records_path": "sleep",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 0.016666666666666666,
+      "fields": {
+        "metric": {
+          "constant": "sleep_light"
+        },
+        "value": {
+          "path": "duration_seconds"
+        },
+        "unit": {
+          "constant": "minutes"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-sleep_light"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "children_path": "stages",
+      "where_all": [
+        {
+          "path": "stage",
+          "equals": "4"
+        }
+      ]
+    },
+    {
+      "records_path": "sleep",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 0.016666666666666666,
+      "fields": {
+        "metric": {
+          "constant": "sleep_deep"
+        },
+        "value": {
+          "path": "duration_seconds"
+        },
+        "unit": {
+          "constant": "minutes"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-sleep_deep"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "children_path": "stages",
+      "where_all": [
+        {
+          "path": "stage",
+          "equals": "5"
+        }
+      ]
+    },
+    {
+      "records_path": "sleep",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "value_multiplier": 0.016666666666666666,
+      "fields": {
+        "metric": {
+          "constant": "sleep_rem"
+        },
+        "value": {
+          "path": "duration_seconds"
+        },
+        "unit": {
+          "constant": "minutes"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-sleep_rem"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "children_path": "stages",
+      "where_all": [
+        {
+          "path": "stage",
+          "equals": "6"
+        }
+      ]
+    },
+    {
+      "records_path": "exercise",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "exercise_distance_meters"
+        },
+        "value": {
+          "path": "distance_meters"
+        },
+        "unit": {
+          "constant": "m"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-exercise_distance_meters"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "type",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "optional_value": true
+    },
+    {
+      "records_path": "exercise",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "exercise_steps"
+        },
+        "value": {
+          "path": "steps"
+        },
+        "unit": {
+          "constant": "count"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-exercise_steps"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "type",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "optional_value": true
+    },
+    {
+      "records_path": "exercise",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "exercise_avg_cadence_spm"
+        },
+        "value": {
+          "path": "avg_cadence_spm"
+        },
+        "unit": {
+          "constant": "steps/min"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-exercise_avg_cadence_spm"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "type",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "optional_value": true
+    },
+    {
+      "records_path": "exercise",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "exercise_max_cadence_spm"
+        },
+        "value": {
+          "path": "max_cadence_spm"
+        },
+        "unit": {
+          "constant": "steps/min"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-exercise_max_cadence_spm"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "type",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "optional_value": true
+    },
+    {
+      "records_path": "exercise",
+      "optional": true,
+      "where": {
+        "path": "metadata.data_origin",
+        "equals": "com.sec.android.app.shealth"
+      },
+      "fields": {
+        "metric": {
+          "constant": "exercise_stride_length_m"
+        },
+        "value": {
+          "path": "stride_length_m"
+        },
+        "unit": {
+          "constant": "m"
+        },
+        "recorded_at": {
+          "path": "end_time"
+        },
+        "source": {
+          "constant": "hc-webhook-samsung-exercise_stride_length_m"
+        },
+        "device": {
+          "constant": "Samsung Health via Health Connect"
+        },
+        "external_id": {
+          "hash_paths": [
+            "metadata.data_origin",
+            "type",
+            "start_time",
+            "end_time"
+          ]
+        }
+      },
+      "optional_value": true
+    }
+  ]
+}

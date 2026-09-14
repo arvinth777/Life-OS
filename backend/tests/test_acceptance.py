@@ -56,6 +56,213 @@ def create(c, table_name, **data):
     return r.json()
 
 
+def test_samsung_bridge_incremental_batches_and_retries(client):
+    token = "separate-test-phone-bridge-secret"
+    assert client.post("/api/secrets/health_webhook_token", json={"value": token}).status_code == 200
+    headers = {"Authorization": "Bearer " + token}
+    endpoint = "/api/integrations/health/hc-webhook-samsung"
+    meta = {"data_origin": "com.sec.android.app.shealth"}
+    start, end = "2026-09-13T10:00:00Z", "2026-09-13T10:15:00Z"
+    payload = {
+        "timestamp": "2026-09-13T10:20:00Z", "app_version": "1.9.20",
+        "steps": [{"count": 321, "start_time": start, "end_time": end, "metadata": meta}],
+        "sleep": [{"duration_seconds": 28800, "session_end_time": end, "stages": [], "metadata": meta}],
+        "exercise": [{"type": "walking", "duration_seconds": 900, "start_time": start, "end_time": end, "metadata": meta}],
+    }
+    assert client.post(endpoint, json=payload).status_code == 401
+    first = client.post(endpoint, json=payload, headers=headers)
+    assert first.status_code == 200, first.text
+    assert first.json() == {"accepted": 3, "duplicates": 0}
+    engine.dispose()
+    payload["timestamp"] = "2026-09-13T10:35:00Z"
+    assert client.post(endpoint, json=payload, headers=headers).json() == {"accepted": 0, "duplicates": 3}
+    stored = client.get("/api/data/health_records").json()
+    assert {r["metric"]: (r["value"], r["unit"]) for r in stored} == {
+        "steps": (321, "count"), "sleep": (8, "hours"), "activity": (15, "minutes")
+    }
+    # A batch can contain just one changed type. Corrections to an existing
+    # identity are ignored, rather than being counted as another interval.
+    steps = payload["steps"][0]
+    partial = {"steps": [{**steps, "count": 333}, {**steps, "start_time": end, "end_time": "2026-09-13T10:30:00Z", "count": 100}]}
+    assert client.post(endpoint, json=partial, headers=headers).json() == {"accepted": 1, "duplicates": 1}
+    partial["steps"].reverse()
+    assert client.post(endpoint, json=partial, headers=headers).json() == {"accepted": 0, "duplicates": 2}
+    other = {"steps": [{**steps, "metadata": {"data_origin": "another.app"}}]}
+    assert client.post(endpoint, json=other, headers=headers).json() == {"accepted": 0, "duplicates": 0}
+    assert client.post(endpoint, json={"timestamp": end}, headers=headers).json() == {"accepted": 0, "duplicates": 0}
+    before = len(client.get("/api/data/health_records").json())
+    bad = {"steps": [{**steps, "end_time": "2026-09-13T11:00:00Z"}, {"count": 5, "metadata": meta}]}
+    assert client.post(endpoint, json=bad, headers=headers).status_code == 422
+    assert len(client.get("/api/data/health_records").json()) == before
+    bad["steps"] = [{**steps, "metadata": {"data_origin": ""}}]
+    # Excluded origins never enter the database.
+    assert client.post(endpoint, json=bad, headers=headers).json()["accepted"] == 0
+
+
+def test_samsung_bridge_water_and_body_suggestions(client):
+    token = "separate-test-phone-bridge-secret"
+    client.post("/api/secrets/health_webhook_token", json={"value": token})
+    meta = {"data_origin": "com.sec.android.app.shealth"}
+    stamp = "2026-09-13T10:00:00Z"
+    payload = {
+        "hydration": [{"liters": .25, "start_time": stamp, "end_time": stamp, "metadata": meta}],
+        "weight": [{"kilograms": 70, "time": stamp, "metadata": meta}],
+        "height": [{"meters": 1.75, "time": stamp, "metadata": meta}],
+    }
+    response = client.post("/api/integrations/health/hc-webhook-samsung", json=payload, headers={"Authorization": "Bearer " + token})
+    assert response.status_code == 200, response.text
+    assert response.json()["accepted"] == 3
+    stored = client.get("/api/data/health_records").json()
+    assert {r["metric"]: (r["value"], r["unit"]) for r in stored} == {"water": (250, "ml"), "weight": (70, "kg"), "height": (175, "cm")}
+    assert len(client.get("/api/data/metric_suggestions").json()) == 2
+    cfg = {r["key"]: r["value"] for r in client.get("/api/data/settings").json()}
+    assert cfg["body"]["weight_kg"] is None and cfg["body"]["height_cm"] is None
+
+
+def test_samsung_only_water_excludes_manual_history_and_latest_sensor_values(client):
+    from app.services import setting
+    stamp = datetime.now(timezone.utc).isoformat()
+    base = {"metric": "water", "value": 500, "unit": "ml", "recorded_at": stamp, "source": "manual", "device": "owner", "external_id": str(uuid.uuid4())}
+    assert client.post("/api/ingest", json=[base]).status_code == 200
+    with engine.begin() as conn:
+        setting(conn, "water_source", "samsung_health")
+        put_secret(conn, "health_webhook_token", "watch-test-token")
+    assert client.get("/api/dashboard").json()["metrics"].get("water", 0) == 0
+    assert client.post("/api/ingest", json=[{**base, "external_id": str(uuid.uuid4())}]).status_code == 422
+    meta = {"data_origin": "com.sec.android.app.shealth"}
+    payload = {
+        "hydration": [{"liters": .25, "start_time": stamp, "end_time": stamp, "metadata": meta}],
+        "heart_rate": [{"bpm": 72, "time": stamp, "metadata": meta}, {"avg": 80, "min": 70, "max": 90, "time": "2026-01-01T00:00:00Z", "metadata": meta}],
+        "skin_temperature": [{"delta_celsius": -.3, "time": stamp, "metadata": meta}],
+        "sleep": [{"duration_seconds": 3600, "session_end_time": stamp, "metadata": meta, "stages": [{"stage": "5", "start_time": "2026-01-01T00:00:00Z", "end_time": "2026-01-01T00:15:00Z", "duration_seconds": 900}]}],
+    }
+    result = client.post("/api/integrations/health/hc-webhook-samsung", json=payload, headers={"Authorization": "Bearer watch-test-token"})
+    assert result.status_code == 200, result.text
+    assert result.json()["accepted"] == 6
+    assert client.get("/api/dashboard").json()["metrics"]["water"] == 250
+    assert client.get("/api/dashboard").json()["water_received_at"]
+    readings = client.get("/api/physical/readings").json()
+    assert len(readings["supported"]) == 37
+    latest = {r["metric"]: r for r in readings["readings"]}
+    assert latest["heart_rate"]["value"] == 72  # latest reading, never a sum of heart rates
+    assert latest["skin_temperature_delta"]["value"] == -.3
+    assert latest["sleep_deep"]["value"] == 15
+    assert len(client.get("/api/data/health_records").json()) == 7  # old manual drink retained
+
+
+def test_large_watch_batch_is_atomic_and_idempotent(client):
+    with engine.begin() as conn:
+        put_secret(conn, "health_webhook_token", "large-watch-test")
+    payload = {"records": [{"metric": "heart_rate", "value": 70, "unit": "bpm", "recorded_at": "2026-09-13T10:00:00Z", "source": "synthetic-watch", "device": "test", "external_id": str(i)} for i in range(6001)]}
+    headers = {"Authorization": "Bearer large-watch-test"}
+    endpoint = "/api/integrations/health/default"
+    assert client.post(endpoint, json=payload, headers=headers).json() == {"accepted": 6001, "duplicates": 0}
+    assert client.post(endpoint, json=payload, headers=headers).json() == {"accepted": 0, "duplicates": 6001}
+    first_page = client.get("/api/data/health_records").json()
+    next_page = client.get("/api/data/health_records?limit=200&offset=200").json()
+    assert len(first_page) == len(next_page) == 200
+    assert not ({r["id"] for r in first_page} & {r["id"] for r in next_page})
+    assert len(client.get("/api/data/health_records?offset=6000").json()) == 1
+    assert client.get("/api/data/health_records?limit=1001").status_code == 422
+
+
+def test_samsung_cloud_is_opt_in_and_private_state_is_encrypted(client):
+    from app.integrations.samsung_storage import SecretSlot, read_json, write_json
+    assert client.post("/api/integrations/samsung/pull").json()["state"] == "not_connected"
+    with engine.begin() as conn:
+        slot = SecretSlot(conn, "samsung_pending")
+        write_json(slot, {"code_verifier": "private-test-verifier", "state": "private-state"})
+        assert read_json(slot)["code_verifier"] == "private-test-verifier"
+    with engine.connect() as conn:
+        exported = json.dumps(export_data(conn), default=str)
+        assert "private-test-verifier" not in exported
+        assert "private-state" not in exported
+    assert client.post("/api/integrations/samsung/auth/finish", json={"callback": "https://evil.example/?secret=test"}).status_code == 400
+    assert client.get("/api/integrations/status").status_code == 200
+    assert client.post("/api/integrations/samsung/disconnect").json() == {"connected": False}
+
+
+def test_samsung_sign_in_encrypted_roundtrip_and_callback_replay(client):
+    import httpx
+    from cryptography.hazmat.primitives import padding
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    from samsung_health_cloud.constants import REDIRECT_URI
+    from samsung_health_cloud.exceptions import AuthenticationError
+    from app.integrations.samsung_account import AccountBootstrap
+    from app.integrations.samsung_storage import SecretSlot, read_json
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public = base64.b64encode(key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)).decode()
+    calls = []
+    def handle(request):
+        calls.append(request)
+        if request.method == "GET":
+            return httpx.Response(200, json={"chkDoNum": 1000, "pkiPublicKey": public, "signInURI": "https://account.samsung.com/accounts/signInGate"})
+        return httpx.Response(200, json={"userauth_token": "synthetic-master-only", "userId": "synthetic-user"})
+    def enc(value, secret):
+        pad = padding.PKCS7(128).padder()
+        plaintext = pad.update(value.encode()) + pad.finalize()
+        cipher = Cipher(algorithms.AES(secret.encode()[:16].ljust(16, b"\0")), modes.ECB()).encryptor()
+        return (cipher.update(plaintext) + cipher.finalize()).hex()
+    with engine.begin() as conn, httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        auth = AccountBootstrap(conn=conn, client=http)
+        assert auth.start().startswith("https://account.samsung.com/accounts/signInGate?")
+        pending = read_json(SecretSlot(conn, "samsung_pending"))
+        response_key = "response-key-001"
+        callback = REDIRECT_URI + "?" + str(httpx.QueryParams({
+            "state": enc(response_key, pending["state"]),
+            "auth_server_url": enc("https://synthetic.samsungosp.com", response_key),
+            "code": enc("synthetic-code", response_key),
+            "retValue": enc("synthetic@example.invalid", response_key),
+        }))
+        assert auth.complete(callback)["authenticated"] is True
+        assert not SecretSlot(conn, "samsung_pending").exists()
+        ciphertext = conn.execute(sa.select(s.secrets.c.ciphertext).where(s.secrets.c.name == "samsung_master")).scalar_one()
+        assert "synthetic-master-only" not in ciphertext
+        assert "synthetic-master-only" in get_secret(conn, "samsung_master")
+        with pytest.raises((ValueError, AuthenticationError)):
+            auth.complete(callback)
+    assert len(calls) == 2
+    assert str(calls[1].url) == "https://synthetic.samsungosp.com/auth/oauth2/authenticate"
+
+
+def test_samsung_cloud_page_resumes_and_raw_stress_is_not_interpreted(client, monkeypatch):
+    from app.services import setting
+    from app.integrations.samsung_session import SamsungHealthService
+    from samsung_health_cloud.data import CloudDataClient
+    from types import SimpleNamespace
+    with engine.begin() as conn:
+        setting(conn, "samsung_cloud", {"enabled": True})
+        put_secret(conn, "samsung_master", "test-master-present")
+    monkeypatch.setattr(SamsungHealthService, "initialize", lambda self: SimpleNamespace(cloud_token="private-cloud-token"))
+    calls = []
+    def page(self, **kwargs):
+        calls.append(kwargs.get("page_token"))
+        return {"documents": [{"data": {"datauuid": "private-record-uuid", "start_time": 1789293600000, "stress_level": 12, "note": "private note", "latitude": 10}}], "nextPageToken": "private-next-token" if len(calls) == 1 else None}
+    monkeypatch.setattr(CloudDataClient, "list_documents", page)
+    first = client.post("/api/integrations/samsung/pull").json()
+    assert first["accepted"] == 1 and first["state"] == "running"
+    engine.dispose()
+    second = client.post("/api/integrations/samsung/pull").json()
+    assert second["duplicates"] == 1 and second["collections_finished"] == 1
+    assert calls == [None, "private-next-token"]
+    records = client.get("/api/data/health_records").json()
+    assert len(records) == 1 and records[0]["unit"] == "raw"
+    assert records[0]["metric"] == "samsung_raw/health.stress/stress_level"
+    assert "private-record-uuid" not in json.dumps(records)
+    with engine.connect() as conn:
+        exported = json.dumps(export_data(conn), default=str)
+        assert "private-next-token" not in exported
+    def fail(self, **kwargs):
+        raise RuntimeError("private-token-must-not-leak")
+    monkeypatch.setattr(CloudDataClient, "list_documents", fail)
+    response = client.post("/api/integrations/samsung/pull")
+    assert response.status_code == 200 and response.json()["state"] == "failed"
+    assert "private-token" not in response.text
+    assert client.get("/api/dashboard").status_code == 200
+
+
 def test_large_chunked_backup_restore_and_legacy_compatibility(client):
     # Incompressible content makes the ZIP exceed the host's 4.5 MB payload cap.
     body = base64.b64encode(os.urandom(1_700_000)).decode()

@@ -716,10 +716,21 @@ export function SettingsPage(p: any) {
             <Panel title="Google Calendar">
               <p>{status.google}</p>
             </Panel>
-            <Panel title="Optional Samsung / Wearables">
+            <Panel title="Samsung cloud">
               <p>
-                {status.samsung}. {status.open_wearables}.
+                {status.samsung}.
               </p>
+              <p className="muted">Samsung-only fields use a separate account connection. The setup guide includes the one-time sign-in helper.</p>
+              {status.samsung_connected && <button disabled={busy} onClick={async () => {
+                setBusy(true);
+                try {
+                  await api("/integrations/samsung/disconnect", "POST");
+                  setMessage("Samsung account disconnected. Your imported readings are kept.");
+                  p.onRefresh();
+                } catch (e) { setError(e.message); }
+                finally { setBusy(false); }
+              }}>Disconnect Samsung account</button>}
+              <p className="muted">{status.open_wearables}.</p>
             </Panel>
           </div>
           <Panel title="Encrypted credentials">

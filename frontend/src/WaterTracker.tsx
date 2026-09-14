@@ -1,6 +1,6 @@
-import { useId, useRef, useState, type CSSProperties } from "react";
-import { Plus, Droplets, Check } from "lucide-react";
-import { api } from "./api";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { Plus, Droplets, Check, RefreshCw } from "lucide-react";
+import { api, fmt } from "./api";
 
 type Props = {
   total?: number;
@@ -8,8 +8,10 @@ type Props = {
   refresh: () => Promise<void>;
   onCustom: () => void;
   onGoal: () => void;
+  samsungOnly?: boolean;
+  receivedAt?: string;
 };
-export function WaterTracker({ total, goal, refresh, onCustom, onGoal }: Props) {
+export function WaterTracker({ total, goal, refresh, onCustom, onGoal, samsungOnly = false, receivedAt }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [needsRefresh, setNeedsRefresh] = useState(false);
@@ -22,12 +24,21 @@ export function WaterTracker({ total, goal, refresh, onCustom, onGoal }: Props) 
   const target = Number.isFinite(goal) && goal > 0 ? goal : 2000;
   const amount = total ?? 0;
   const level = Math.max(0, Math.min(1, amount / target));
+  const previousTotal = useRef(total);
+  useEffect(() => {
+    if (samsungOnly && previousTotal.current !== undefined && total !== previousTotal.current) setPours((n) => n + 1);
+    previousTotal.current = total;
+  }, [total, samsungOnly]);
   async function drink() {
     if (locked.current || total === undefined) return;
     locked.current = true;
     setBusy(true);
     setError("");
     try {
+      if (samsungOnly) {
+        await refresh();
+        return;
+      }
       if (!saved.current) {
         pending.current ||= {
           metric: "water", value: 250, unit: "ml",
@@ -45,7 +56,7 @@ export function WaterTracker({ total, goal, refresh, onCustom, onGoal }: Props) 
       setPours((n) => n + 1);
     } catch (e) {
       setNeedsRefresh(saved.current);
-      setError(saved.current
+      setError(samsungOnly ? "Could not refresh Samsung Health water. Try again." : saved.current
         ? "Your drink is saved. Refresh the total to see it."
         : "Could not confirm your drink. Try again; it won’t be counted twice.");
     } finally {
@@ -63,7 +74,7 @@ export function WaterTracker({ total, goal, refresh, onCustom, onGoal }: Props) 
         className="water-tank"
         onClick={drink}
         disabled={busy || total === undefined}
-        aria-label={needsRefresh ? "Refresh water total" : "Add 250 ml of water"}
+        aria-label={samsungOnly ? "Refresh Samsung Health water total" : needsRefresh ? "Refresh water total" : "Add 250 ml of water"}
         aria-describedby={id + "-amount"}
         aria-busy={busy}
       >
@@ -81,16 +92,17 @@ export function WaterTracker({ total, goal, refresh, onCustom, onGoal }: Props) 
             <small>of {target.toLocaleString()} ml daily goal</small>
           </span>
           <span className="water-add">
-            {busy ? (needsRefresh ? "Refreshing…" : "Saving…") : needsRefresh ? "Refresh total" : <><Plus size={17} />250 ml</>}
+            {busy ? (samsungOnly || needsRefresh ? "Refreshing…" : "Saving…") : samsungOnly ? <><RefreshCw size={17} />Refresh total</> : needsRefresh ? "Refresh total" : <><Plus size={17} />250 ml</>}
           </span>
         </span>
       </button>
       <div className="water-footer">
         <span role="status" aria-live="polite">
-          {pours > 0 ? <><Check size={15} />250 ml saved</> : total === undefined ? "Loading today’s water…" : amount >= target ? "Daily goal reached" : `${Math.ceil(target - amount).toLocaleString()} ml to your goal`}
+          {samsungOnly ? (receivedAt ? `Received ${fmt(receivedAt)}` : "Waiting for Samsung Health water") : pours > 0 ? <><Check size={15} />250 ml saved</> : total === undefined ? "Loading today’s water…" : amount >= target ? "Daily goal reached" : `${Math.ceil(target - amount).toLocaleString()} ml to your goal`}
         </span>
-        <button className="text-button" onClick={onCustom} disabled={busy || needsRefresh}>Different amount</button>
+        {!samsungOnly && <button className="text-button" onClick={onCustom} disabled={busy || needsRefresh}>Different amount</button>}
       </div>
+      {samsungOnly && <p className="muted">Log water in Samsung Health. Your phone sends it here automatically once connected.</p>}
       {error && <p className="error" role="alert">{error}</p>}
     </section>
   );

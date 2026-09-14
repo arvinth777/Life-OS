@@ -160,3 +160,12 @@ The owner requested removing water from Home and tying animation to actions. [Pu
 ## Interaction polish
 
 [Playful, purposeful interactions](docs/INTERACTION_POLISH.md) records the motion audit and decisions: confirmed check-offs and save receipts, DSA teaching/review transitions, and data-driven chart and muscle feedback. The nine-module layout and free hosting stack stay in place.
+
+## Watch connection decisions — 14 September 2026
+
+- Water stays in Physical goals and follows the owner's Samsung Health-only preference; existing manual history is retained.
+- Watch data has its own Physical tab so source coverage and last readings can be inspected without crowding Home.
+- Private Samsung fields appear as raw values separately from validated daily metrics until their meanings and units are verified.
+- History imports are paged, resumable requests using the existing encrypted secret storage and normalized health tables; no schema rewrite or worker is introduced.
+- HC Webhook v1.9.20 and samsung-re-health 0.7.1 are pinned; a bridge/protocol failure stops only that integration, preserving saved data and manual use.
+- macOS authentication uses a temporary callback helper; unsupported host platforms and unavailable cloud documents remain explicitly documented limits.
