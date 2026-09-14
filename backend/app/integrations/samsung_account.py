@@ -1,6 +1,7 @@
 # Adapted from samsung-re-health 0.7.1 account_auth.py, Copyright 2026 Charles Bel.
 # MIT licensed; see THIRD_PARTY_LICENSES/samsung-re-health.txt.
-# Only persistence/initialization is adapted: no token is written to a local file.
+# Persistence is encrypted in Postgres; bare Samsung callback hostnames are
+# normalized to HTTPS. No token is written to a local file.
 from __future__ import annotations
 
 import secrets

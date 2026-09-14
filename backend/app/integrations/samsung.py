@@ -7,6 +7,7 @@ import json
 import math
 import time
 import hashlib
+import re
 from datetime import datetime, timezone
 from importlib.resources import files
 import httpx
@@ -153,21 +154,59 @@ def pull_page():
         cursor = read_json(cursor_slot) if cursor_slot.exists() else {}
         now = int(time.time() * 1000)
         if cursor.get("complete") and now < cursor.get("finished_at", 0) + max(15, int(cfg.get("interval_minutes", 60))) * 60000:
-            return {"state": "complete", "message": "Current Samsung import pass is finished", "accepted": 0}
+            missing = cursor.get("unavailable", [])
+            return {"state": "complete", "message": f"Import pass finished; {len(missing)} collections unavailable" if missing else "Current Samsung import pass is finished", "accepted": 0, "unavailable_collections": missing}
         if cursor.get("complete"):
-            cursor = {"since": max(0, cursor["finished_at"] - 86400000)}
+            cursor = {"since": max(0, cursor["finished_at"] - 86400000), "retry_full": cursor.get("unavailable", []), "revisions": cursor.get("revisions", {})}
         catalog = json.loads(files("samsung_health_cloud").joinpath("resources/manifests.json").read_text())
         manifests = catalog["manifests"] if isinstance(catalog, dict) else catalog
         # Stress is attempted first; unsupported/deprecated manifests remain visible.
         manifests = sorted(manifests, key=lambda m: (m["manifest_id"] != "com.samsung.health.stress", m["manifest_id"]))
         index = cursor.get("index", 0)
         manifest = manifests[index]
+        revision = cursor.get("revisions", {}).get(manifest["manifest_id"], manifest["schema_revision"])
         status, message, accepted, duplicates, skipped = "running", "Page received", 0, 0, 0
+        diagnostic, stage = {}, "session"
+        provider_diagnostic = {}
+        private_values = []
+        def read_error(response):
+            if response.status_code < 400 or response.request.url.host != "api.samsungcloud.com":
+                return
+            response.read()
+            provider_diagnostic["content_type"] = response.headers.get("content-type", "").split(";")[0]
+            message = ""
+            try:
+                body = response.json()
+                # Restrict diagnostics to error fields; selected messages are
+                # redacted below before storage or display.
+                if isinstance(body, dict):
+                    provider_diagnostic["error_fields"] = [k for k in body if re.fullmatch(r"[A-Za-z_]{1,40}", k)][:20]
+                    code = body.get("code", body.get("errorCode", body.get("rcode")))
+                    if isinstance(code, (str, int)) and re.fullmatch(r"[A-Za-z0-9_.-]{1,50}", str(code)):
+                        provider_diagnostic["provider_code"] = str(code)
+                    text = json.dumps(body).lower()
+                    provider_diagnostic["problem_fields"] = [word for word in ("start_time", "end_time", "schemarevision", "limit", "version", "e2ee", "decrypt", "region", "permission", "terms", "unsupported", "invalid", "filter") if word in text]
+                    details = body.get("error", body)
+                    if isinstance(details, dict):
+                        message = next((details[k] for k in ("message", "errorMessage", "description", "error_description", "rmsg") if isinstance(details.get(k), str)), "")
+            except ValueError:
+                match = re.search(r"<title>([^<]{1,200})</title>", response.text, re.I)
+                if match:
+                    message = match[1]
+            if message:
+                for private in private_values:
+                    if private:
+                        message = message.replace(private, "[private]")
+                message = re.sub(r"https?://\S+|[\w.+-]+@[\w.-]+|[A-Za-z0-9_=-]{24,}", "[private]", message)
+                provider_diagnostic["provider_message"] = message[:200]
         try:
-            with httpx.Client(timeout=12, follow_redirects=False) as http:
+            with httpx.Client(timeout=12, follow_redirects=False, event_hooks={"response": [read_error]}) as http:
                 service = SamsungHealthService(store=EncryptedStateStore(conn), master_state_path=SecretSlot(conn, "samsung_master"), health_auth=HealthAuth(http), scsp=ScspIdentity(http, profile=DeviceProfile()))
                 session = service.initialize()
-                page = CloudDataClient(http).list_documents(manifest_id=manifest["manifest_id"], schema_revision=manifest["schema_revision"], cloud_authorization=session.cloud_token, limit=100, page_token=cursor.get("page"), start_time=cursor.get("since", 0))
+                private_values[:] = [session.cloud_token, session.user_id, session.cdid, session.registration_id, session.health_access_token, session.health_refresh_token]
+                stage = "documents"
+                since = None if manifest["manifest_id"] in cursor.get("retry_full", []) else cursor.get("since") or None
+                page = CloudDataClient(http).list_documents(manifest_id=manifest["manifest_id"], schema_revision=revision, cloud_authorization=session.cloud_token, limit=100, page_token=cursor.get("page"), start_time=since)
             records, skipped = normalize_documents(page.get("documents", []), manifest["manifest_id"])
             if records:
                 result = ingest(conn, records)
@@ -181,16 +220,38 @@ def pull_page():
         except Exception as exc:
             # Keep credentials encrypted and preserve the cursor; never send raw
             # provider errors, signed URLs, or authentication details to the UI.
-            if "HTTP 404" in str(exc):
+            error_text = str(exc)
+            http_status = re.search(r"HTTP ([0-9]{3})", error_text)
+            operation = next((name for name in ("authorize", "token", "SCSP registration", "SCSP token", "document GET") if error_text.startswith(name)), "internal")
+            kind = next((name for name in ("query mismatch", "path mismatch", "untrusted", "missing", "invalid", "network", "redirect") if name in error_text), "request")
+            diagnostic = {"stage": stage, "operation": operation, "kind": kind, "http_status": int(http_status[1]) if http_status else None}
+            diagnostic.update(provider_diagnostic)
+            # Samsung also uses 400 for an absent collection. Only this exact
+            # response may advance the cursor; other 400s retain it for retry.
+            absent_collection = diagnostic["http_status"] == 400 and provider_diagnostic.get("provider_message") == f"cid of {manifest['manifest_id']} not exists"
+            schema_hint = re.fullmatch(r"The schemaRevision is invalid, you should update to the latest schema information \(server revision: ([0-9]{1,4})\)", provider_diagnostic.get("provider_message", ""))
+            if stage == "documents" and (diagnostic["http_status"] == 404 or absent_collection):
                 status, message = "unavailable", "Samsung does not expose this collection"
                 cursor.update(index=index + 1, page=None)
+                cursor.setdefault("unavailable", []).append(manifest["manifest_id"])
+            elif stage == "documents" and diagnostic["http_status"] == 400 and schema_hint and 0 <= int(schema_hint[1]) <= 1000 and int(schema_hint[1]) != revision and cursor.get("revision_retries", {}).get(manifest["manifest_id"], 0) < 2:
+                # Adopt only Samsung's explicit schema number, once per request
+                # and at most twice per collection/pass. Catalog revisions can
+                # be higher or lower than the server's current version.
+                cursor.setdefault("revisions", {})[manifest["manifest_id"]] = int(schema_hint[1])
+                retries = cursor.setdefault("revision_retries", {})
+                retries[manifest["manifest_id"]] = retries.get(manifest["manifest_id"], 0) + 1
+                cursor["page"] = None
+                status, message = "running", "Samsung updated its record format; retrying this collection"
             else:
-                status, message = "failed", "Samsung could not finish this page. Retry or reconnect."
+                status, message = "failed", "Samsung could not finish this page. Your import position is saved."
         if cursor.get("index", 0) >= len(manifests):
             cursor.update(complete=True, finished_at=now)
+            if cursor.get("unavailable"):
+                message = f"Import pass finished; {len(cursor['unavailable'])} collections unavailable"
         write_json(cursor_slot, cursor)
-        conn.execute(sa.insert(s.integration_runs).values(provider="samsung-cloud", status=status, detail=message, cursor={"collection": manifest["manifest_id"], "accepted": accepted, "duplicates": duplicates, "skipped": skipped}))
-        return {"state": "complete" if cursor.get("complete") else status, "message": message, "collection": manifest["manifest_id"], "accepted": accepted, "duplicates": duplicates, "skipped": skipped, "collections_finished": cursor.get("index", 0), "collections_total": len(manifests)}
+        conn.execute(sa.insert(s.integration_runs).values(provider="samsung-cloud", status=status, detail=message, cursor={"collection": manifest["manifest_id"], "accepted": accepted, "duplicates": duplicates, "skipped": skipped, "diagnostic": diagnostic}))
+        return {"state": "complete" if cursor.get("complete") else status, "message": message, "collection": manifest["manifest_id"], "accepted": accepted, "duplicates": duplicates, "skipped": skipped, "collections_finished": cursor.get("index", 0), "collections_total": len(manifests), "unavailable_collections": cursor.get("unavailable", []), "diagnostic": diagnostic}
 
 
 @router.post("/pull")

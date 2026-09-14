@@ -77,15 +77,25 @@ def nutrition(body):
     )
 
 
-def normalize_body(payload, mapping):
+def normalize_body(payload, mapping, diagnostics=None):
     if "streams" in mapping:
         if not isinstance(mapping["streams"], list):
             raise ValueError("Mapping streams must be a list")
-        return [
-            record
-            for stream in mapping["streams"]
-            for record in normalize_body(payload, stream)
-        ]
+        result = []
+        for stream in mapping["streams"]:
+            try:
+                result.extend(normalize_body(payload, stream, diagnostics))
+            except (KeyError, IndexError, TypeError, ValueError) as exc:
+                spec = stream.get("fields", {}).get("metric", {})
+                metric = spec.get("constant", "unknown") if isinstance(spec, dict) else "unknown"
+                metric = metric[:80] if isinstance(metric, str) else "unknown"
+                detail = {"stage": "mapping", "metric": metric, "error_type": type(exc).__name__}
+                if isinstance(exc, KeyError) and exc.args and isinstance(exc.args[0], str):
+                    detail["missing_field"] = exc.args[0][:80]
+                error = ValueError(f"The {metric} mapping could not read a field in the bridge payload")
+                error.bridge_detail = detail
+                raise error from None
+        return result
 
     def get(obj, path):
         if path in ("", None, "$"):
@@ -115,7 +125,24 @@ def normalize_body(payload, mapping):
     result = []
     for row in records:
         conditions = mapping.get("where_all", []) + ([mapping["where"]] if mapping.get("where") else [])
-        if any(get(row, condition["path"]) != condition["equals"] for condition in conditions):
+        matches = True
+        for condition in conditions:
+            try:
+                actual = get(row, condition["path"])
+            except KeyError:
+                # Missing provenance cannot satisfy an origin filter. Exclude
+                # it without rejecting verified records in the same request.
+                if diagnostics is not None:
+                    spec = mapping.get("fields", {}).get("metric", {})
+                    metric = spec.get("constant", "unknown") if isinstance(spec, dict) else "unknown"
+                    key = (metric, condition["path"])
+                    diagnostics[key] = diagnostics.get(key, 0) + 1
+                matches = False
+                break
+            if actual != condition["equals"]:
+                matches = False
+                break
+        if not matches:
             continue
         if mapping.get("optional_value"):
             try:

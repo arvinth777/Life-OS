@@ -7,6 +7,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from fastapi import FastAPI, Depends, HTTPException, Request, Body, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from .db import engine
 from . import schema as s
 from .security import (
@@ -59,8 +61,35 @@ async def security_headers(request, call_next):
     return response
 
 
+def record_bridge_failure(request, detail):
+    if not request.url.path.startswith("/api/integrations/health/"):
+        return
+    # Only a bridge with the valid secret can create a diagnostic. No request
+    # body, reading values, headers, or credentials are retained here.
+    with engine.begin() as conn:
+        expected = get_secret(conn, "health_webhook_token")
+        provided = request.headers.get("authorization", "").removeprefix("Bearer ")
+        if expected and random.compare_digest(expected, provided):
+            conn.execute(sa.insert(s.integration_runs).values(provider="health-webhook", status="rejected", detail="Phone sync validation failed", cursor=detail))
+
+
+@app.exception_handler(RequestValidationError)
+async def invalid_request(request, exc):
+    if request.url.path.startswith("/api/integrations/health/"):
+        detail = {"stage": "request", "error_types": sorted({e["type"] for e in exc.errors()})}
+        record_bridge_failure(request, detail)
+        return JSONResponse({"detail": "The phone bridge must send a valid JSON body", "diagnostic": detail}, 422)
+    return await request_validation_exception_handler(request, exc)
+
+
 @app.exception_handler(ValueError)
 async def invalid(request, exc):
+    # Validation messages from conversion libraries can contain input values.
+    # Keep only known app-generated reasons in the durable diagnostic.
+    reason = str(exc)
+    known = ("Supply 1–25000 health records; shorten the phone sync range for larger imports", "Health text fields cannot be empty", "Health value must be finite and nonnegative", "Bridge source must identify the bridge")
+    detail = getattr(exc, "bridge_detail", {"stage": "ingestion", "reason": reason if reason in known else "Invalid mapped field type or value"})
+    record_bridge_failure(request, detail)
     return JSONResponse({"detail": str(exc)}, 422)
 
 
@@ -76,6 +105,7 @@ async def constraint(request, exc):
 
 @app.exception_handler(DataError)
 async def bad_data(request, exc):
+    record_bridge_failure(request, {"stage": "database", "reason": "Mapped field has an invalid value"})
     return JSONResponse({"detail": "A field has an invalid value."}, 422)
 
 
@@ -522,9 +552,10 @@ def watch_readings():
         ).mappings()]
         mapping = conn.execute(sa.select(s.ingestion_mappings.c.mapping).where(s.ingestion_mappings.c.name == "hc-webhook-samsung")).scalar_one_or_none()
         connected = bool(get_secret(conn, "samsung_master"))
+        sync = conn.execute(sa.select(s.integration_runs.c.status, s.integration_runs.c.detail, s.integration_runs.c.cursor, s.integration_runs.c.created_at).where(s.integration_runs.c.provider == "health-webhook").order_by(s.integration_runs.c.created_at.desc()).limit(1)).mappings().first()
     fields = (mapping or {}).get("streams", [])
     supported = [{"metric": st["fields"]["metric"]["constant"], "unit": st["fields"]["unit"]["constant"]} for st in fields]
-    return {"readings": latest, "supported": supported, "samsung_connected": connected}
+    return {"readings": latest, "supported": supported, "samsung_connected": connected, "phone_sync": dict(sync) if sync else None}
 
 
 @app.get("/api/calendar/agenda", dependencies=[Depends(owner)])
@@ -664,15 +695,18 @@ def webhook(mapping_name: str, request: Request, payload=Body(...)):
         )
         if not mapping:
             raise HTTPException(404, "Mapping not found")
+        omitted = {}
         try:
-            normalized = normalize_body(payload, mapping["mapping"])
+            normalized = normalize_body(payload, mapping["mapping"], omitted)
         except (KeyError, IndexError, TypeError) as exc:
             raise ValueError("Mapping does not match payload: " + str(exc))
         if any(r.get("source") == "manual" for r in normalized):
             raise ValueError("Bridge source must identify the bridge")
-        if not normalized:
-            return {"accepted": 0, "duplicates": 0}
-        return ingest(conn, normalized)
+        result = ingest(conn, normalized) if normalized else {"accepted": 0, "duplicates": 0}
+        if omitted:
+            result["skipped_unverified"] = [{"metric": metric, "field": field, "count": count} for (metric, field), count in omitted.items()]
+        conn.execute(sa.insert(s.integration_runs).values(provider="health-webhook", status="partial" if omitted else "ok", detail="Some readings could not be verified and were left out" if omitted else "Phone sync received", cursor=result))
+        return result
 
 
 @app.post("/api/integrations/mapping-preview", dependencies=[Depends(owner)])

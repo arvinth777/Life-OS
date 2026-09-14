@@ -56,6 +56,61 @@ def create(c, table_name, **data):
     return r.json()
 
 
+def test_bridge_validation_diagnostics_do_not_store_payload_or_key(client):
+    token = "private-phone-secret"
+    client.post("/api/secrets/health_webhook_token", json={"value": token})
+    endpoint = "/api/integrations/health/hc-webhook-samsung"
+    payload = {"steps": [{"count": 12, "start_time": "2026-09-14T01:00:00Z", "private_note": "private-health-content", "metadata": {"data_origin": "com.sec.android.app.shealth"}}]}
+    assert client.post(endpoint, json=payload).status_code == 401
+    with engine.connect() as conn:
+        assert conn.execute(sa.select(sa.func.count()).select_from(s.integration_runs)).scalar_one() == 0
+    headers = {"Authorization": "Bearer " + token}
+    result = client.post(endpoint, headers=headers, json=payload)
+    assert result.status_code == 422
+    malformed = client.post(endpoint, headers={**headers, "Content-Type": "application/json"}, content='{"private-health-content":')
+    assert malformed.status_code == 422
+    with engine.connect() as conn:
+        entries = conn.execute(sa.select(s.integration_runs)).mappings().all()
+    assert len(entries) == 2
+    mapping = next(row["cursor"] for row in entries if row["cursor"]["stage"] == "mapping")
+    assert mapping == {"stage": "mapping", "metric": "steps", "error_type": "KeyError", "missing_field": "end_time"}
+    assert any(row["cursor"].get("error_types") == ["json_invalid"] for row in entries)
+    diagnostic = json.dumps([dict(row) for row in entries], default=str)
+    assert token not in diagnostic and "private-health-content" not in diagnostic
+
+
+def test_bridge_saves_verified_readings_and_reports_unverified_ones(client):
+    token = "partial-phone-test"
+    client.post("/api/secrets/health_webhook_token", json={"value": token})
+    headers = {"Authorization": "Bearer " + token}
+    endpoint = "/api/integrations/health/hc-webhook-samsung"
+    start, end = "2026-09-14T01:00:00Z", "2026-09-14T01:15:00Z"
+    meta = {"data_origin": "com.sec.android.app.shealth"}
+    payload = {
+        "steps": [{"count": 12, "start_time": start, "end_time": end, "metadata": meta}],
+        "distance": [{"meters": 99, "start_time": start, "end_time": end}],
+        "hydration": [
+            {"liters": .25, "start_time": start, "end_time": end, "metadata": meta},
+            {"liters": 99, "start_time": start, "end_time": end},
+            {"liters": 88, "start_time": start, "end_time": end, "metadata": {"data_origin": "another.app"}},
+        ],
+    }
+    result = client.post(endpoint, headers=headers, json=payload)
+    assert result.status_code == 200 and result.json()["accepted"] == 2
+    assert {item["metric"]: item["count"] for item in result.json()["skipped_unverified"]} == {"water": 1, "distance": 1}
+    saved = client.get("/api/data/health_records").json()
+    assert {r["metric"]: r["value"] for r in saved} == {"steps": 12, "water": 250}
+    retry = client.post(endpoint, headers=headers, json=payload).json()
+    assert retry["accepted"] == 0 and retry["duplicates"] == 2
+    phone = client.get("/api/physical/readings").json()["phone_sync"]
+    assert phone["status"] == "partial" and phone["cursor"]["skipped_unverified"] == retry["skipped_unverified"]
+    # Source-qualified malformed records still reject atomically.
+    payload["steps"][0]["end_time"] = "2026-09-14T02:00:00Z"
+    payload["hydration"][0]["liters"] = -1
+    assert client.post(endpoint, headers=headers, json=payload).status_code == 422
+    assert len(client.get("/api/data/health_records").json()) == 2
+
+
 def test_samsung_bridge_incremental_batches_and_retries(client):
     token = "separate-test-phone-bridge-secret"
     assert client.post("/api/secrets/health_webhook_token", json={"value": token}).status_code == 200
@@ -264,11 +319,11 @@ def test_samsung_cloud_page_resumes_and_raw_stress_is_not_interpreted(client, mo
     from app.services import setting
     from app.integrations.samsung_session import SamsungHealthService
     from samsung_health_cloud.data import CloudDataClient
-    from types import SimpleNamespace
+    from samsung_health_cloud.state import HealthState
     with engine.begin() as conn:
         setting(conn, "samsung_cloud", {"enabled": True})
         put_secret(conn, "samsung_master", "test-master-present")
-    monkeypatch.setattr(SamsungHealthService, "initialize", lambda self: SimpleNamespace(cloud_token="private-cloud-token"))
+    monkeypatch.setattr(SamsungHealthService, "initialize", lambda self: HealthState(cloud_token="private-cloud-token"))
     calls = []
     def page(self, **kwargs):
         calls.append(kwargs.get("page_token"))
@@ -294,6 +349,113 @@ def test_samsung_cloud_page_resumes_and_raw_stress_is_not_interpreted(client, mo
     assert response.status_code == 200 and response.json()["state"] == "failed"
     assert "private-token" not in response.text
     assert client.get("/api/dashboard").status_code == 200
+
+
+def test_samsung_data_error_diagnostics_redact_credentials(client, monkeypatch):
+    import httpx
+    from app.services import setting
+    from app.integrations.samsung_session import SamsungHealthService
+    from samsung_health_cloud.state import HealthState
+    with engine.begin() as conn:
+        setting(conn, "samsung_cloud", {"enabled": True})
+        put_secret(conn, "samsung_master", "test-master-present")
+    state = HealthState(cloud_token="private-cloud-token", user_id="private-user", cdid="private-device")
+    monkeypatch.setattr(SamsungHealthService, "initialize", lambda self: state)
+    def response(request):
+        assert "start_time" not in request.url.params
+        return httpx.Response(400, json={"code": "BAD_REQUEST", "message": "Invalid schemaRevision for private-user private-device private-cloud-token person@example.com https://example.com/private"})
+    real_client = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(response), **kwargs))
+    result = client.post("/api/integrations/samsung/pull")
+    assert result.status_code == 200 and result.json()["state"] == "failed"
+    diagnostic = result.json()["diagnostic"]
+    assert diagnostic["stage"] == "documents" and diagnostic["http_status"] == 400
+    assert diagnostic["provider_code"] == "BAD_REQUEST"
+    assert "schemarevision" in diagnostic["problem_fields"]
+    assert diagnostic["provider_message"].startswith("Invalid schemaRevision")
+    with engine.connect() as conn:
+        saved = json.dumps(export_data(conn), default=str)
+    for private in ("private-user", "private-device", "private-cloud-token", "person@example.com", "https://example.com/private"):
+        assert private not in result.text and private not in saved
+
+
+@pytest.mark.parametrize("server_revision", [15, 4])
+def test_samsung_server_revision_retries_same_collection(client, monkeypatch, server_revision):
+    import httpx
+    from app.services import setting
+    from app.integrations.samsung_session import SamsungHealthService
+    from app.integrations.samsung_storage import SecretSlot, read_json, write_json
+    from samsung_health_cloud.state import HealthState
+    with engine.begin() as conn:
+        setting(conn, "samsung_cloud", {"enabled": True})
+        put_secret(conn, "samsung_master", "test-master-present")
+        write_json(SecretSlot(conn, "samsung_cursor"), {"page": "old-schema-page"})
+    monkeypatch.setattr(SamsungHealthService, "initialize", lambda self: HealthState(cloud_token="private-token"))
+    requests = []
+    def response(request):
+        requests.append(request)
+        if len(requests) == 1:
+            return httpx.Response(400, json={"rcode": 4001001, "rmsg": f"The schemaRevision is invalid, you should update to the latest schema information (server revision: {server_revision})"})
+        return httpx.Response(200, json={"documents": []})
+    real_client = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(response), **kwargs))
+    first = client.post("/api/integrations/samsung/pull").json()
+    engine.dispose()
+    second = client.post("/api/integrations/samsung/pull").json()
+    assert first["state"] == "running" and first["collections_finished"] == 0
+    assert second["collection"] == first["collection"] and second["collections_finished"] == 1
+    assert requests[0].url.params["schemaRevision"] == "13"
+    assert requests[1].url.params["schemaRevision"] == str(server_revision) and "pageToken" not in requests[1].url.params
+    with engine.connect() as conn:
+        assert read_json(SecretSlot(conn, "samsung_cursor"))["revisions"]["com.samsung.health.stress"] == server_revision
+    # A provider that keeps changing its requested revision cannot make the
+    # browser retry forever. Preserve the collection after the bounded retries.
+    requests.clear()
+    with engine.begin() as conn:
+        write_json(SecretSlot(conn, "samsung_cursor"), {"revision_retries": {"com.samsung.health.stress": 2}})
+    assert client.post("/api/integrations/samsung/pull").json()["state"] == "failed"
+
+
+@pytest.mark.parametrize("status", [400, 404])
+def test_samsung_missing_collections_do_not_block_or_lose_history(client, monkeypatch, status):
+    import httpx
+    from app.services import setting
+    from app.integrations.samsung_session import SamsungHealthService
+    from app.integrations.samsung_storage import SecretSlot, read_json, write_json
+    from samsung_health_cloud.state import HealthState
+    with engine.begin() as conn:
+        setting(conn, "samsung_cloud", {"enabled": True})
+        put_secret(conn, "samsung_master", "test-master-present")
+    monkeypatch.setattr(SamsungHealthService, "initialize", lambda self: HealthState(cloud_token="private-token"))
+    requests = []
+    def response(request):
+        requests.append(request)
+        manifest = request.url.path.split("/")[-2]
+        return httpx.Response(status, json={"rcode": 40001, "rmsg": f"cid of {manifest} not exists"})
+    real_client = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(response), **kwargs))
+    first = client.post("/api/integrations/samsung/pull").json()
+    assert first["state"] == "unavailable" and first["collections_finished"] == 1
+    assert first["unavailable_collections"] == ["com.samsung.health.stress"]
+    second = client.post("/api/integrations/samsung/pull").json()
+    assert second["collection"] != first["collection"] and second["collections_finished"] == 2
+    with engine.begin() as conn:
+        slot = SecretSlot(conn, "samsung_cursor")
+        cursor = read_json(slot)
+        cursor.update(index=15)
+        write_json(slot, cursor)
+    last = client.post("/api/integrations/samsung/pull").json()
+    assert last["state"] == "complete" and "3 collections unavailable" in last["message"]
+    cached = client.post("/api/integrations/samsung/pull").json()
+    assert cached["unavailable_collections"] == last["unavailable_collections"]
+    with engine.begin() as conn:
+        slot = SecretSlot(conn, "samsung_cursor")
+        cursor = read_json(slot)
+        cursor["finished_at"] -= 3_600_001
+        write_json(slot, cursor)
+    retry = client.post("/api/integrations/samsung/pull").json()
+    assert retry["collection"] == "com.samsung.health.stress"
+    assert "start_time" not in requests[-1].url.params
 
 
 def test_large_chunked_backup_restore_and_legacy_compatibility(client):

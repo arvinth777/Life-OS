@@ -169,3 +169,7 @@ The owner requested removing water from Home and tying animation to actions. [Pu
 - History imports are paged, resumable requests using the existing encrypted secret storage and normalized health tables; no schema rewrite or worker is introduced.
 - HC Webhook v1.9.20 and samsung-re-health 0.7.1 are pinned; a bridge/protocol failure stops only that integration, preserving saved data and manual use.
 - macOS authentication uses a temporary callback helper; unsupported host platforms and unavailable cloud documents remain explicitly documented limits.
+
+Phone sync validation stores field-level diagnostics without retaining request payloads or secrets; unavailable Samsung collections and format changes preserve resumable history.
+
+Watch data places the latest phone delivery and omitted-reading counts above the metric table, so partial coverage is visible without opening a technical log.

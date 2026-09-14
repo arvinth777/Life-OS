@@ -297,8 +297,17 @@ function WatchReadings({ refresh }: any) {
     finally { setImporting(false); }
   }
   const readings = Object.fromEntries((data?.readings || []).map((r: any) => [r.metric, r]));
+  const phone = data?.phone_sync;
+  const omitted = phone?.cursor?.skipped_unverified || [];
+  const omittedCount = omitted.reduce((sum: number, item: any) => sum + item.count, 0);
   return <Panel title="Samsung Health readings" action={<button onClick={load} disabled={busy}>{busy ? "Refreshing…" : "Refresh readings"}</button>}>
     <p className="muted">Latest received readings. Availability depends on what Samsung Health shares with your phone bridge. Record history is in Health records.</p>
+    {phone && <div className="notice" role="status">
+      <strong>{phone.status === "rejected" ? "Last phone sync could not be saved" : "Phone sync received"}</strong>
+      <p>{fmt(phone.created_at)}{phone.status !== "rejected" && ` · ${Number(phone.cursor?.accepted || 0).toLocaleString()} saved · ${Number(phone.cursor?.duplicates || 0).toLocaleString()} already saved`}</p>
+      {omittedCount > 0 && <p>{omittedCount.toLocaleString()} unverified {omittedCount === 1 ? "reading was" : "readings were"} left out: {omitted.map((item: any) => title(item.metric)).join(", ")}. In HC Webhook → Configuration → Data types, select Full for each affected type so its source information is included.</p>}
+      {phone.status === "rejected" && <p>{phone.cursor?.metric ? `${title(phone.cursor.metric)} could not be read. ` : ""}Check the phone's JSON format and data settings, then retry. Your previously saved readings are still available.</p>}
+    </div>}
     {data?.samsung_connected && <div className="form-actions">
       <button onClick={importing ? () => { stop.current = true; } : importCloud}>{importing ? "Pause after this batch" : "Import / resume Samsung history"}</button>
     </div>}
