@@ -1,3 +1,4 @@
+import { AssistantSettings, LearningLog } from "./assistant";
 import React, { useEffect, useState } from "react";
 import {
   Plus,
@@ -136,8 +137,7 @@ export function Journal(p: any) {
                 </button>
                 {!status.llm_configured && (
                   <small>
-                    AI is not configured. Add a key in Settings when you want
-                    feedback.
+                    In-app AI is not configured. You can also reflect in ChatGPT and save a summary through Life OS.
                   </small>
                 )}
                 {feedback
@@ -145,7 +145,7 @@ export function Journal(p: any) {
                   .map((f) => (
                     <div className="feedback" key={f.id}>
                       <div className="section-head">
-                        <small>{fmt(f.created_at)}</small>
+                        <small>{f.provider === "ChatGPT insight" ? "ChatGPT insight · " : "AI feedback · "}{fmt(f.created_at)}</small>
                         <button
                           className="icon"
                           aria-label="Delete feedback"
@@ -329,6 +329,8 @@ export function Academic(p: any) {
           "terms",
           "courses",
           "assignments",
+          "exams",
+          "learning",
           "grade_components",
           "grades",
           "goals",
@@ -381,7 +383,7 @@ export function Academic(p: any) {
             bands and GPA weighting in Settings.
           </p>
         </>
-      ) : (
+      ) : tab === "learning" ? <LearningLog {...p} /> : (
         <Records
           key={tab}
           {...p}
@@ -651,6 +653,7 @@ export function SettingsPage(p: any) {
           ["preferences", "Preferences"],
           ["reminders", "Reminders"],
           ["integrations", "Connections & AI"],
+          ["assistant", "ChatGPT & history"],
           ["mapping", "Bridge mapping"],
           ["backup", "Backup & restore"],
         ]}
@@ -665,7 +668,7 @@ export function SettingsPage(p: any) {
           {message}
         </p>
       )}
-      {tab === "preferences" ? (
+      {tab === "assistant" ? <AssistantSettings {...p} /> : tab === "preferences" ? (
         <>
           <Preferences {...p} />
           <details>

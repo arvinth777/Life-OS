@@ -11,3 +11,8 @@ python-dotenv==1.1.0
 pytest==8.3.5
 PyJWT==2.10.1
 samsung-re-health==0.7.1
+
+mcp==1.26.0
+python-multipart==0.0.22
+sse-starlette==2.3.6
+starlette==0.46.2

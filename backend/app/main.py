@@ -36,7 +36,20 @@ from .services import (
 from .domain import sm2, next_task_date, normalize_body, calendar_occurrences
 from .backup import coerce, export_data, archive, parse_backup, restore, dumps
 
-app = FastAPI(title="Life OS", version="1.0.0")
+from contextlib import asynccontextmanager
+from .assistant_mcp import mcp
+from .assistant import router as assistant_router
+from .assistant_auth import router as assistant_auth_router
+mcp_app = mcp.streamable_http_app()
+
+@asynccontextmanager
+async def lifespan(app):
+    async with mcp.session_manager.run():
+        yield
+
+app = FastAPI(title="Life OS", version="1.0.0", lifespan=lifespan)
+app.include_router(assistant_router)
+app.include_router(assistant_auth_router)
 from .transfers import router as transfer_router
 from .integrations.samsung import router as samsung_router
 
@@ -211,6 +224,8 @@ def get_table(name, write=False):
         "secrets",
         "auth_attempts",
         "backup_transfers",
+        "assistant_oauth",
+        "assistant_batches",
     }:
         raise HTTPException(404, "Table is not available")
     if write and name in s.SYSTEM:
@@ -228,6 +243,8 @@ def schema():
             "secrets",
             "auth_attempts",
             "backup_transfers",
+        "assistant_oauth",
+        "assistant_batches",
         }:
             continue
         fields = []
@@ -428,6 +445,8 @@ def validate(conn, name, payload, existing=None):
                 parent = conn.execute(
                     sa.select(s.tasks.c.parent_id).where(s.tasks.c.id == parent)
                 ).scalar_one_or_none()
+    if name == "exams" and not merged.get("import_key"):
+        data["import_key"] = str(uuid.uuid4())
     if name == "calendar_events":
         ZoneInfo(merged.get("timezone", "UTC"))
         if merged.get("recurrence"):
@@ -513,6 +532,9 @@ def delete_record(name: str, ident: uuid.UUID):
                 .values(deleted_at=s.now(), updated_at=s.now(), sync_state="deleted")
             )
         else:
+            if name == "journal_entries":
+                from .assistant import purge_journal_history
+                purge_journal_history(conn, ident)
             conn.execute(sa.delete(t).where(t.c.id == ident))
     return {"ok": True}
 
@@ -579,95 +601,16 @@ def agenda(start: datetime, end: datetime):
 
 @app.post("/api/tasks/{ident}/complete", dependencies=[Depends(owner)])
 def complete(ident: uuid.UUID):
+    from .operations import complete_task
     with engine.begin() as conn:
-        task = (
-            conn.execute(
-                sa.select(s.tasks).where(s.tasks.c.id == ident).with_for_update()
-            )
-            .mappings()
-            .first()
-        )
-        if not task:
-            raise HTTPException(404, "Task not found")
-        if task["status"] == "done":
-            return {"ok": True, "next": None}
-        unfinished = conn.execute(
-            sa.select(sa.func.count())
-            .select_from(s.tasks)
-            .where(s.tasks.c.parent_id == ident, s.tasks.c.status != "done")
-        ).scalar()
-        if unfinished:
-            raise ValueError("Complete the subtasks first")
-        at = s.now()
-        conn.execute(
-            sa.update(s.tasks)
-            .where(s.tasks.c.id == ident)
-            .values(status="done", completed_at=at, updated_at=at)
-        )
-        next_id = None
-        if task["rrule"]:
-            nxt = next_task_date(
-                task["rrule"],
-                task["recurrence_anchor"] or task["due_at"],
-                at,
-                config(conn).get("timezone", "UTC"),
-            )
-            if nxt:
-                data = {
-                    k: v
-                    for k, v in task.items()
-                    if k not in {"id", "created_at", "updated_at", "completed_at"}
-                }
-                # A completed parent's historical subtasks must not acquire future children.
-                # A recurring subtask's next instance is independent and can be re-parented.
-                data.update(
-                    status="open", due_at=nxt, previous_id=ident, parent_id=None
-                )
-                next_id = conn.execute(
-                    pg_insert(s.tasks)
-                    .values(**data)
-                    .on_conflict_do_nothing(index_elements=[s.tasks.c.previous_id])
-                    .returning(s.tasks.c.id)
-                ).scalar_one_or_none()
-    return {"ok": True, "next": next_id}
+        return complete_task(conn, ident)
 
 
 @app.post("/api/reviews/{ident}", dependencies=[Depends(owner)])
 def review(ident: uuid.UUID, payload: dict = Body(...)):
+    from .operations import review_note
     with engine.begin() as conn:
-        note = (
-            conn.execute(
-                sa.select(s.concept_notes)
-                .where(s.concept_notes.c.id == ident)
-                .with_for_update()
-            )
-            .mappings()
-            .first()
-        )
-        if not note:
-            raise HTTPException(404, "Concept note not found")
-        state = {
-            k: note[k]
-            for k in ("ease_factor", "repetitions", "interval_days", "due_on")
-        }
-        at = s.now()
-        today = at.astimezone(ZoneInfo(config(conn).get("timezone", "UTC"))).date()
-        nxt = sm2(state, payload.get("grade"), today)
-        conn.execute(
-            sa.update(s.concept_notes)
-            .where(s.concept_notes.c.id == ident)
-            .values(**nxt, updated_at=at)
-        )
-        conn.execute(
-            sa.insert(s.reviews).values(
-                note_id=ident,
-                grade=payload["grade"],
-                reviewed_at=at,
-                previous_state=json.loads(dumps(state)),
-                next_state=json.loads(dumps(nxt)),
-            )
-        )
-        return nxt
+        return review_note(conn, ident, payload.get("grade"))
 
 
 @app.post("/api/ingest", dependencies=[Depends(owner)])
@@ -880,5 +823,10 @@ def ai(feature: str, ident: uuid.UUID, payload: dict = Body(default={})):
 @app.delete("/api/feedback/{ident}", dependencies=[Depends(owner)])
 def delete_feedback(ident: uuid.UUID):
     with engine.begin() as conn:
+        from .assistant import purge_journal_history
+        purge_journal_history(conn, ident, feedback_only=True)
         conn.execute(sa.delete(s.ai_feedback).where(s.ai_feedback.c.id == ident))
     return {"ok": True}
+
+# Keep existing API routes ahead of the private MCP/OAuth routes.
+app.mount("/", mcp_app)

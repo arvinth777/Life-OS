@@ -1,3 +1,4 @@
+import { LearningLog } from "./assistant";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
@@ -13,7 +14,7 @@ import { api, title, fmt, todayDate } from "./api";
 import { Panel, Records, Tabs, Editor, Empty, Trend } from "./components";
 import { SuccessMark, savedFeedback, confirmationPause, ValueBar } from "./feedback";
 export function DSA(p: any) {
-  const [tab, setTab] = useState("learn");
+  const [tab, setTab] = useState("progress");
   const [data, setData] = useState<any>({});
   const [selected, setSelected] = useState("");
   const [edit, setEdit] = useState<any>();
@@ -64,9 +65,9 @@ export function DSA(p: any) {
         active={tab}
         onChange={setTab}
         items={[
-          ["learn", "Learning path"],
-          ["review", "Concept reviews"],
           ["progress", "Your progress"],
+          ["review", "Concept reviews"],
+          ["learn", "Learning path"],
           ["author", "Edit curriculum"],
         ]}
       />
@@ -204,6 +205,7 @@ export function DSA(p: any) {
         </>
       ) : tab === "progress" ? (
         <>
+          <LearningLog {...p} />
           <Panel title="Time to solve">
             <Trend
               values={progress.trend

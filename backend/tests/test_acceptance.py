@@ -532,7 +532,7 @@ def test_large_chunked_backup_restore_and_legacy_compatibility(client):
     legacy = dict(
         data,
         schema="0001",
-        tables={k: v for k, v in data["tables"].items() if k != "backup_transfers"},
+        tables={k: v for k, v in data["tables"].items() if k not in {"backup_transfers", "assistant_oauth", "assistant_batches", "learning_topics", "learning_sessions", "exams"}},
     )
     legacy["tables"]["alembic_version"] = [{"version_num": "0001"}]
     with engine.begin() as conn:
@@ -540,7 +540,7 @@ def test_large_chunked_backup_restore_and_legacy_compatibility(client):
     with engine.connect() as conn:
         assert (
             conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "0002"
+            == "0003"
         )
 
 
@@ -1119,3 +1119,158 @@ def test_nested_stream_mapping_and_invalid_restore(client):
         client.post("/api/restore?replace=true", content=b"PKbroken").status_code == 422
     )
     assert client.get("/api/data/lessons").status_code == 200
+
+
+def test_assistant_batch_preview_retry_undo_and_later_edit(client):
+    body={'request_key':'journal-test-001','summary':'Save a brief reflection','operations':[
+        {'action':'create','table':'journal_entries','label':'entry','data':{'title':'A useful day','body':'A short private summary'}},
+        {'action':'journal_insight','data':{'entry_id':'$entry','body':'An insight, clearly separate from the owner\'s words.'}},
+    ]}
+    preview=client.post('/api/assistant/preview',json=body)
+    assert preview.status_code==200,preview.text
+    assert client.get('/api/data/journal_entries').json()==[]
+    applied=client.post('/api/assistant/apply',json=body)
+    assert applied.status_code==200,applied.text
+    assert client.post('/api/assistant/apply',json=body).json()['duplicate']
+    altered={**body,'summary':'different'}
+    assert client.post('/api/assistant/apply',json=altered).status_code==422
+    ident=applied.json()['batch_id']
+    assert client.post('/api/assistant/undo/'+ident).status_code==200
+    assert client.get('/api/data/journal_entries').json()==[]
+    body['request_key']='journal-test-002'
+    applied=client.post('/api/assistant/apply',json=body).json()
+    entry=client.get('/api/data/journal_entries').json()[0]
+    client.patch('/api/data/journal_entries/'+entry['id'],json={'body':'A later owner edit'})
+    assert client.post('/api/assistant/undo/'+applied['batch_id']).status_code==422
+    client.delete('/api/data/journal_entries/'+entry['id'])
+    with engine.connect() as conn:
+        b=conn.execute(sa.select(s.assistant_batches).where(s.assistant_batches.c.id==uuid.UUID(applied['batch_id']))).mappings().one()
+        assert b['changes']==[] and b['status']=='purged'
+        assert 'short private summary' not in dumps(dict(b))
+
+
+def test_assistant_batch_atomic_constraints_and_learning(client):
+    body={'request_key':'learning-test-001','summary':'Save reported learning','operations':[
+        {'action':'create','table':'learning_topics','label':'topic','data':{'title':'Python lists','next_step':'Practice indexing'}},
+        {'action':'create','table':'learning_sessions','data':{'topic_id':'$topic','kind':'studied','summary':'Explained list indexing','minutes':None}},
+    ]}
+    response=client.post('/api/assistant/apply',json=body)
+    assert response.status_code==200,response.text
+    assert client.get('/api/data/learning_sessions').json()[0]['minutes'] is None
+    bad={'request_key':'learning-test-bad','summary':'Invalid batch','operations':[
+        {'action':'create','table':'tasks','data':{'title':'Must be rolled back'}},
+        {'action':'create','table':'learning_topics','data':{'title':'No invented mastery','status':'mastered'}},
+    ]}
+    assert client.post('/api/assistant/apply',json=bad).status_code==409
+    assert not any(t['title']=='Must be rolled back' for t in client.get('/api/data/tasks').json())
+    topic=client.get('/api/data/learning_topics').json()[0]
+    update={'request_key':'learning-update-001','summary':'Update next step','operations':[{'action':'update','table':'learning_topics','record_id':topic['id'],'data':{'next_step':'Review slicing'}}]}
+    assert client.post('/api/assistant/apply',json=update).status_code==422
+    update['operations'][0]['expected_updated_at']=topic['updated_at']
+    assert client.post('/api/assistant/apply',json=update).status_code==200
+    from app.assistant import search_context
+    with pytest.raises(ValueError): search_context(table='secrets')
+
+
+def test_assistant_reuses_task_completion_and_review_rules(client):
+    task=create(client,'tasks',title='Study',due_at=(s.now()+timedelta(hours=1)).isoformat(),rrule='FREQ=DAILY')
+    body={'request_key':'complete-test-001','summary':'Finished studying','operations':[{'action':'complete_task','record_id':task['id'],'expected_updated_at':task['updated_at']}]}
+    r=client.post('/api/assistant/apply',json=body)
+    assert r.status_code==200,r.text
+    assert len(client.get('/api/data/tasks').json())==2
+    assert client.post('/api/assistant/undo/'+r.json()['batch_id']).status_code==200
+    assert len(client.get('/api/data/tasks').json())==1
+    note=create(client,'concept_notes',title='List indexing',front='First index?',back='0')
+    body={'request_key':'review-test-001','summary':'Reviewed indexing','operations':[{'action':'review_concept','record_id':note['id'],'expected_updated_at':note['updated_at'],'data':{'grade':4}}]}
+    r=client.post('/api/assistant/apply',json=body)
+    assert r.status_code==200,r.text
+    assert client.get('/api/data/concept_notes').json()[0]['repetitions']==1
+    assert client.post('/api/assistant/undo/'+r.json()['batch_id']).status_code==200
+    assert client.get('/api/data/concept_notes').json()[0]['repetitions']==0
+
+
+def test_assistant_oauth_pkce_rotation_revocation_and_mcp(client):
+    from urllib.parse import urlsplit,parse_qs
+    from app.assistant_auth import RESOURCE, BASE
+    verifier='a'*64
+    challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip('=')
+    with TestClient(app,base_url=BASE) as c:
+        unauthorized=c.post('/mcp',json={'jsonrpc':'2.0','id':1,'method':'tools/list'})
+        assert unauthorized.status_code==401
+        assert 'resource_metadata=' in unauthorized.headers['www-authenticate']
+        metadata=c.get('/.well-known/oauth-authorization-server')
+        assert metadata.status_code==200
+        bad=c.post('/register',json={'redirect_uris':['https://attacker.example/callback'],'token_endpoint_auth_method':'none'})
+        assert bad.status_code==400
+        registered=c.post('/register',json={'redirect_uris':['https://chatgpt.com/connector_platform/oauth_redirect'],'token_endpoint_auth_method':'none','scope':'lifeos:read lifeos:write'})
+        assert registered.status_code==201,registered.text
+        cid=registered.json()['client_id']; callback='https://chatgpt.com/connector_platform/oauth_redirect'
+        params={'client_id':cid,'response_type':'code','redirect_uri':callback,'code_challenge':challenge,'code_challenge_method':'S256','scope':'lifeos:read lifeos:write','resource':RESOURCE,'state':'test-state'}
+        auth=c.get('/authorize',params=params,follow_redirects=False)
+        assert auth.status_code in (302,303),auth.text
+        nonce=parse_qs(urlsplit(auth.headers['location']).query)['request'][0]
+        assert c.post('/api/assistant/approve',json={'request':nonce}).status_code==401
+        approved=client.post('/api/assistant/approve',json={'request':nonce})
+        assert approved.status_code==200,approved.text
+        assert client.post('/api/assistant/approve',json={'request':nonce}).status_code==400
+        code=parse_qs(urlsplit(approved.json()['redirect']).query)['code'][0]
+        token_body={'client_id':cid,'grant_type':'authorization_code','code':code,'redirect_uri':callback,'code_verifier':'b'*64,'resource':RESOURCE}
+        assert c.post('/token',data=token_body).status_code==400
+        token_body['code_verifier']=verifier
+        response=c.post('/token',data=token_body)
+        assert response.status_code==200,response.text
+        tokens=response.json()
+        assert c.post('/token',data=token_body).status_code==400
+        headers={'Authorization':'Bearer '+tokens['access_token'],'Accept':'application/json, text/event-stream'}
+        response=c.post('/mcp',headers=headers,json={'jsonrpc':'2.0','id':1,'method':'tools/list'})
+        assert response.status_code==200,response.text
+        assert 'lifeos_morning_brief' in [t['name'] for t in response.json()['result']['tools']]
+        refresh={'client_id':cid,'grant_type':'refresh_token','refresh_token':tokens['refresh_token']}
+        rotated=c.post('/token',data=refresh)
+        assert rotated.status_code==200,rotated.text
+        assert c.post('/token',data=refresh).status_code==400
+        assert c.post('/mcp',headers=headers,json={'jsonrpc':'2.0','id':2,'method':'tools/list'}).status_code==401
+        tokens=rotated.json();headers['Authorization']='Bearer '+tokens['access_token']
+        result=c.post('/mcp',headers=headers,json={'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'lifeos_morning_brief','arguments':{}}})
+        assert result.status_code==200,result.text
+        assert not result.json()['result'].get('isError'),result.text
+        assert client.post('/api/assistant/disconnect').status_code==200
+        assert c.post('/mcp',headers=headers,json={'jsonrpc':'2.0','id':4,'method':'tools/list'}).status_code==401
+        with engine.connect() as conn:
+            stored=dumps([dict(r) for r in conn.execute(sa.select(s.assistant_oauth)).mappings()])
+            assert tokens['access_token'] not in stored and tokens['refresh_token'] not in stored
+
+
+def test_assistant_tables_backup_roundtrip_and_v2_restore(client):
+    body={'request_key':'backup-learning-001','summary':'Save a learning topic','operations':[{'action':'create','table':'learning_topics','data':{'title':'Backup learning','next_step':'Read a worked example'}}]}
+    assert client.post('/api/assistant/apply',json=body).status_code==200
+    assert client.get('/api/data/assistant_oauth').status_code==404
+    assert client.get('/api/data/assistant_batches').status_code==404
+    with engine.begin() as conn: data=export_data(conn)
+    packed=archive(data)
+    with zipfile.ZipFile(io.BytesIO(packed)) as z:
+        out=io.BytesIO()
+        with zipfile.ZipFile(out,'w') as csv_only:
+            for n in z.namelist():
+                if n.startswith('csv/') or n=='manifest.json': csv_only.writestr(n,z.read(n))
+    restored=parse_backup(out.getvalue())
+    with engine.begin() as conn: restore(conn,restored,replace=True)
+    engine.dispose()
+    assert client.get('/api/data/learning_topics').json()[0]['title']=='Backup learning'
+    from app.backup import ASSISTANT_TABLES
+    legacy={**data,'schema':'0002','tables':{k:v for k,v in data['tables'].items() if k not in ASSISTANT_TABLES}}
+    legacy['tables']['alembic_version']=[{'version_num':'0002'}]
+    with engine.begin() as conn: restore(conn,legacy,replace=True)
+    assert client.get('/api/data/learning_topics').json()==[]
+
+
+def test_assistant_deleted_insight_is_purged_from_undo(client):
+    entry=create(client,'journal_entries',title='Reflection',body='Summary')
+    body={'request_key':'insight-delete-001','summary':'Save a separate insight','operations':[{'action':'journal_insight','data':{'entry_id':entry['id'],'body':'A deletable private insight'}}]}
+    result=client.post('/api/assistant/apply',json=body).json()
+    ident=result['receipts'][0]['id']
+    assert client.delete('/api/feedback/'+ident).status_code==200
+    with engine.connect() as conn:
+        batch=conn.execute(sa.select(s.assistant_batches).where(s.assistant_batches.c.id==uuid.UUID(result['batch_id']))).mappings().one()
+        assert batch['changes']==[] and batch['status']=='purged'
+    assert client.get('/api/data/journal_entries').json()[0]['body']=='Summary'
