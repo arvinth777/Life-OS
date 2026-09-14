@@ -191,7 +191,12 @@ def test_samsung_sign_in_encrypted_roundtrip_and_callback_replay(client):
     from samsung_health_cloud.constants import REDIRECT_URI
     from samsung_health_cloud.exceptions import AuthenticationError
     from app.integrations.samsung_account import AccountBootstrap
+    from app.integrations.samsung_account import _trusted_auth_server_url
     from app.integrations.samsung_storage import SecretSlot, read_json
+    assert _trusted_auth_server_url("eu-auth2.samsungosp.com") == "https://eu-auth2.samsungosp.com"
+    for hostile in ("http://eu-auth2.samsungosp.com", "eu-auth2.samsungosp.com.evil.example", "https://user@eu-auth2.samsungosp.com", "https://eu-auth2.samsungosp.com/elsewhere"):
+        with pytest.raises(AuthenticationError):
+            _trusted_auth_server_url(hostile)
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public = base64.b64encode(key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)).decode()
     calls = []
@@ -212,7 +217,7 @@ def test_samsung_sign_in_encrypted_roundtrip_and_callback_replay(client):
         response_key = "response-key-001"
         callback = REDIRECT_URI + "?" + str(httpx.QueryParams({
             "state": enc(response_key, pending["state"]),
-            "auth_server_url": enc("https://synthetic.samsungosp.com", response_key),
+            "auth_server_url": enc("synthetic.samsungosp.com", response_key),
             "code": enc("synthetic-code", response_key),
             "retValue": enc("synthetic@example.invalid", response_key),
         }))

@@ -73,6 +73,11 @@ def _validate_sign_in_uri(value: Any) -> str:
 
 
 def _trusted_auth_server_url(value: str) -> str:
+    # Samsung's live callback can return a bare regional hostname (observed:
+    # eu-auth2.samsungosp.com). Canonicalize only plain DNS names to HTTPS;
+    # the same Samsung-only authority checks still apply below. Never accept HTTP.
+    if isinstance(value, str) and re.fullmatch(r"[a-zA-Z0-9.-]{1,253}", value):
+        value = "https://" + value
     try:
         parsed = urllib.parse.urlsplit(value)
         port = parsed.port
