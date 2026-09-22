@@ -83,7 +83,7 @@ All entered times use the browser's timezone (identified beside date-time contro
 | `OWNER_PASSWORD_HASH` | Host bootstrap only; generate an Argon2 hash locally as shown below. Never a plaintext password. Ignored once an owner exists. |
 | `PORT` | Host-provided API port, usually automatic. |
 | `VITE_API_URL` | Optional frontend build-time API origin. Alternatively set the API connection on the sign-in screen; this stores only its URL locally. |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Reserved for Phase 2 OAuth transport. Setting them does **not** activate Google sync in this version. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PUBLIC_API_URL` | Optional Google Calendar OAuth. Create a Web application OAuth client, set `PUBLIC_API_URL` to the API origin, and allow `${PUBLIC_API_URL}/api/integrations/google/auth/callback` as an authorized redirect URI. Without these values, the local calendar continues to work. |
 | Samsung cloud | No additional environment secret is required. `settings.samsung_cloud.enabled` defaults false; successful Samsung sign-in enables it. All private state uses `ENCRYPTION_KEY`. |
 | `OPEN_WEARABLES_URL`, `OPEN_WEARABLES_API_KEY` | Reserved for an optional companion route; not consumed by this Phase 1 build. |
 
@@ -154,7 +154,13 @@ The first output is `ENCRYPTION_KEY`; the second is `OWNER_PASSWORD_HASH`. Save 
 
 ## Scheduled work
 
-In-app reminders evaluate when the app opens and through authenticated `POST /api/digest`. Configure a long random digest token in Settings if an external scheduler will call it. No scheduler is required: the next app load catches up. No push notifications, email delivery, persistent background worker, or guarantee of work while the app is closed. Google polling and webhook channel transport are Phase 2 work, not simulated schedules.
+In-app reminders evaluate when the app opens and through authenticated `POST /api/digest`. Configure a long random digest token in Settings if an external scheduler will call it. No scheduler is required: the next app load catches up. Google Calendar poll mode also catches up during app-load digests at its configured interval. Push mode uses Google notification channels, while the same incremental pull remains the source of truth. No push notifications, email delivery, persistent background worker, or guarantee of work while the app is closed.
+
+## Google Calendar connection
+
+Create a free Google Cloud project, enable the Google Calendar API, and create an OAuth 2.0 Web application client. Add `https://YOUR_API_HOST/api/integrations/google/auth/callback` as its exact authorized redirect URI. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `PUBLIC_API_URL=https://YOUR_API_HOST` on the API host, then redeploy. In Life OS, open Settings → Connections & AI → Google Calendar, enter the one calendar ID to sync (`primary` is allowed), choose polling or push, save, and select **Connect Google**. The refresh token is encrypted with `ENCRYPTION_KEY`.
+
+Polling is the reliable default for a cold-starting free host. It runs on demand and during digest catch-up; it is not a promise of an exact wall-clock schedule while the app is closed. Push mode requires the public API to stay reachable and Google may renew or expire channels. Both modes use incremental sync tokens, propagate deletions, preserve recurring masters and exceptions, and log timestamp conflicts.
 
 ## Samsung account sign-in for private fields
 

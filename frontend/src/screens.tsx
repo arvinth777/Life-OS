@@ -491,6 +491,7 @@ export function Calendar(p: any) {
   const [agenda, setAgenda] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [edit, setEdit] = useState(false);
+  const [google, setGoogle] = useState<any>({});
   useEffect(() => {
     const end = new Date(month.getFullYear(), month.getMonth() + 1, 1);
     api(
@@ -502,6 +503,11 @@ export function Calendar(p: any) {
       .then(setAgenda)
       .catch((e) => setError(e.message));
   }, [month, p.refresh]);
+  useEffect(() => {
+    api("/integrations/status")
+      .then((value) => setGoogle(value.google || {}))
+      .catch(() => setGoogle({}));
+  }, [p.refresh]);
   return (
     <>
       <Tabs
@@ -580,7 +586,11 @@ export function Calendar(p: any) {
           columns={["title", "starts_at", "ends_at", "recurrence"]}
         />
       )}
-      <p className="muted">Google Calendar is not connected. Events saved here stay in Life OS.</p>
+      <p className="muted">
+        {google.connected
+          ? `Two-way sync is active for ${google.calendar_id}; ${google.transport === "push" ? "webhook notifications with catch-up" : `polling every ${google.poll_minutes} minutes`}.`
+          : "Events stay in Life OS until one Google calendar is connected in Settings."}
+      </p>
       {edit && (
         <Editor
           table="calendar_events"
@@ -605,9 +615,19 @@ export function SettingsPage(p: any) {
   );
   const [sample, setSample] = useState('{"records":[]}');
   const [preview, setPreview] = useState("");
+  const [googleCalendar, setGoogleCalendar] = useState("");
+  const [googleTransport, setGoogleTransport] = useState("poll");
+  const [googlePoll, setGooglePoll] = useState(15);
   useEffect(() => {
     api("/integrations/status")
-      .then(setStatus)
+      .then((next) => {
+        setStatus(next);
+        if (next.google) {
+          setGoogleCalendar(next.google.calendar_id || "");
+          setGoogleTransport(next.google.transport || "poll");
+          setGooglePoll(next.google.poll_minutes || 15);
+        }
+      })
       .catch((e) => setError(e.message));
   }, [p.refresh]);
   async function download() {
@@ -717,7 +737,82 @@ export function SettingsPage(p: any) {
               </p>
             </Panel>
             <Panel title="Google Calendar">
-              <p>{status.google}</p>
+              <p>
+                {status.google?.connected
+                  ? `Connected to ${status.google.calendar_id}.`
+                  : status.google?.configured
+                    ? "Ready to connect one designated calendar."
+                    : "The API host still needs the free Google OAuth credentials."}
+              </p>
+              {status.google?.last_synced_at && (
+                <p className="muted">Last synced {fmt(status.google.last_synced_at)}</p>
+              )}
+              {status.google?.last_error && <p className="error">{status.google.last_error}</p>}
+              <div className="form-grid compact-fields">
+                <label>
+                  Calendar ID
+                  <input
+                    value={googleCalendar}
+                    onChange={(e) => setGoogleCalendar(e.target.value)}
+                    placeholder="primary or calendar@group.calendar.google.com"
+                  />
+                </label>
+                <label>
+                  Sync transport
+                  <select value={googleTransport} onChange={(e) => setGoogleTransport(e.target.value)}>
+                    <option value="poll">Interval polling</option>
+                    <option value="push">Webhook + catch-up</option>
+                  </select>
+                </label>
+                <label>
+                  Poll minutes
+                  <input type="number" min={5} max={1440} value={googlePoll} onChange={(e) => setGooglePoll(Number(e.target.value))} />
+                </label>
+              </div>
+              <div className="actions">
+                <button disabled={busy} onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await api("/integrations/google/config", "POST", { calendar_id: googleCalendar, transport: googleTransport, poll_minutes: googlePoll });
+                    setMessage("Google Calendar settings saved.");
+                    p.onRefresh();
+                  } catch (e) { setError(e.message); }
+                  finally { setBusy(false); }
+                }}>Save calendar</button>
+                {!status.google?.connected ? (
+                  <button className="primary" disabled={busy || !status.google?.configured || !googleCalendar} onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await api("/integrations/google/config", "POST", { calendar_id: googleCalendar, transport: googleTransport, poll_minutes: googlePoll });
+                      const result = await api("/integrations/google/auth/start");
+                      window.open(result.authorization_url, "life-os-google", "popup,width=620,height=760");
+                      setMessage("Finish Google sign-in in the new window, then press Sync now.");
+                    } catch (e) { setError(e.message); }
+                    finally { setBusy(false); }
+                  }}>Connect Google</button>
+                ) : (
+                  <>
+                    <button className="primary" disabled={busy} onClick={async () => {
+                      setBusy(true);
+                      try {
+                        const result = await api("/integrations/google/sync", "POST");
+                        setMessage(`Calendar synced: ${result.pulled || 0} pulled, ${result.pushed || 0} pushed.`);
+                        p.onRefresh();
+                      } catch (e) { setError(e.message); }
+                      finally { setBusy(false); }
+                    }}>Sync now</button>
+                    <button disabled={busy} onClick={async () => {
+                      setBusy(true);
+                      try {
+                        await api("/integrations/google/disconnect", "POST");
+                        setMessage("Google disconnected. Local events are kept.");
+                        p.onRefresh();
+                      } catch (e) { setError(e.message); }
+                      finally { setBusy(false); }
+                    }}>Disconnect</button>
+                  </>
+                )}
+              </div>
             </Panel>
             <Panel title="Samsung cloud">
               <p>

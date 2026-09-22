@@ -120,6 +120,9 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
       .getByRole("button", { name: "DSA in Python", exact: true })
       .click();
     await page
+      .getByRole("button", { name: "Learning path", exact: true })
+      .click();
+    await page
       .getByRole("button", { name: "Two pointers", exact: true })
       .click();
     await expect(

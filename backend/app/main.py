@@ -52,9 +52,11 @@ app.include_router(assistant_router)
 app.include_router(assistant_auth_router)
 from .transfers import router as transfer_router
 from .integrations.samsung import router as samsung_router
+from .integrations.google import router as google_router
 
 app.include_router(transfer_router)
 app.include_router(samsung_router)
+app.include_router(google_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(","),
@@ -715,7 +717,14 @@ def digest_run():
         )
         result = reminders(conn)
     from .integrations.samsung import pull
-    return {"reminders": result, "calendar_sync": "deferred; use local calendar", "samsung": pull()}
+    from .integrations.google import sync_calendar, google_status
+    with engine.connect() as conn:
+        google = google_status(conn)
+    due = not google["last_synced_at"] or s.now() - google["last_synced_at"] >= timedelta(minutes=google["poll_minutes"])
+    calendar = sync_calendar() if google["configured"] and google["connected"] and due else {
+        "state": "not_due" if google["configured"] and google["connected"] else "not_connected"
+    }
+    return {"reminders": result, "calendar_sync": calendar, "samsung": pull()}
 
 
 @app.get("/api/backup", dependencies=[Depends(owner)])
@@ -766,14 +775,16 @@ def save_secret(name: str, payload: dict = Body(...)):
 
 @app.get("/api/integrations/status", dependencies=[Depends(owner)])
 def integration_status():
+    from .integrations.google import google_status
     with engine.connect() as conn:
         names = set(conn.execute(sa.select(s.secrets.c.name)).scalars())
         usage = rows(conn, "ai_usage")
+        google = google_status(conn)
     return {
         "llm_configured": "llm_api_key" in names,
         "health_configured": "health_webhook_token" in names,
         "samsung_connected": "samsung_master" in names,
-        "google": "Phase 2 scaffold; live sync is not implemented",
+        "google": google,
         "samsung": "Samsung account linked; private cloud import available" if "samsung_master" in names else "Samsung account sign-in needed for private cloud readings",
         "open_wearables": "Deferred; companion app not built",
         "input_tokens": sum(r["input_tokens"] for r in usage),

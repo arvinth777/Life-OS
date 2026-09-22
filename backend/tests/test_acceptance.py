@@ -1057,6 +1057,153 @@ def test_google_tie_rule_and_nutrition():
     ) == {"configured": True, "bmr": 1674, "maintenance": 2008, "protein_g": 112}
 
 
+def test_google_incremental_410_pages_and_recurrence(client, monkeypatch):
+    from app.integrations import google
+
+    stamp = "2026-09-20T08:00:00Z"
+    master = {
+        "id": "master1", "etag": "m1", "updated": stamp, "summary": "Weekly lab",
+        "start": {"dateTime": "2026-09-20T09:00:00Z", "timeZone": "Asia/Kolkata"},
+        "end": {"dateTime": "2026-09-20T10:00:00Z", "timeZone": "Asia/Kolkata"},
+        "recurrence": ["RRULE:FREQ=WEEKLY"],
+    }
+    exception = {
+        "id": "exception1", "etag": "e1", "updated": stamp, "summary": "Moved lab",
+        "recurringEventId": "master1",
+        "originalStartTime": {"dateTime": "2026-09-27T09:00:00Z"},
+        "start": {"dateTime": "2026-09-27T11:00:00Z"},
+        "end": {"dateTime": "2026-09-27T12:00:00Z"},
+    }
+    calls = []
+    pages = [
+        google.GoogleError(410, "expired"),
+        {"items": [exception, master], "nextPageToken": "page-2"},
+        {"items": [], "nextSyncToken": "sync-new"},
+    ]
+    def fake_request(_client, method, url, token, **kwargs):
+        calls.append(kwargs.get("params", {}))
+        result = pages.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return result
+    monkeypatch.setattr(google, "_request", fake_request)
+    with engine.begin() as conn:
+        conn.execute(sa.insert(s.calendar_sync).values(calendar_id="primary", sync_token="expired"))
+    conn = engine.connect()
+    try:
+        assert google._pull_pages(conn, object(), "token", "primary", "UTC") == 2
+    finally:
+        conn.close()
+    assert calls[0]["syncToken"] == "expired"
+    assert "syncToken" not in calls[1]
+    assert calls[2]["pageToken"] == "page-2"
+    with engine.connect() as conn:
+        state = conn.execute(sa.select(s.calendar_sync)).mappings().one()
+        events = conn.execute(sa.select(s.calendar_events).order_by(s.calendar_events.c.google_event_id)).mappings().all()
+    assert state["sync_token"] == "sync-new" and state["page_token"] is None
+    assert events[0]["master_id"] == events[1]["id"]
+
+
+def test_google_conflict_tie_push_and_delete(client, monkeypatch):
+    from app.integrations import google
+
+    stamp = datetime(2026, 9, 20, 8, tzinfo=timezone.utc)
+    with engine.begin() as conn:
+        local = conn.execute(sa.insert(s.calendar_events).values(
+            title="Local title", description="", starts_at=stamp, ends_at=stamp + timedelta(hours=1),
+            timezone="UTC", google_event_id="remote1", etag="old", sync_state="dirty", updated_at=stamp,
+        ).returning(s.calendar_events)).mappings().one()
+        remote = {
+            "id": "remote1", "etag": "new", "updated": stamp.isoformat(), "summary": "Google title",
+            "start": {"dateTime": stamp.isoformat()}, "end": {"dateTime": (stamp + timedelta(hours=1)).isoformat()},
+        }
+        saved = google._apply_remote(conn, object(), "token", "primary", remote)
+        assert saved["title"] == "Google title" and saved["sync_state"] == "synced"
+        conflict = conn.execute(sa.select(s.sync_conflicts)).mappings().one()
+        assert conflict["winner"] == "google"
+        fresh = conn.execute(sa.insert(s.calendar_events).values(
+            title="Create me", description="", starts_at=stamp, ends_at=stamp + timedelta(hours=1), timezone="UTC"
+        ).returning(s.calendar_events)).mappings().one()
+    requests = []
+    def fake_request(_client, method, url, token, **kwargs):
+        requests.append((method, url, kwargs))
+        if method == "POST":
+            return {"id": kwargs["payload"]["id"], "etag": "created"}
+        return {}
+    monkeypatch.setattr(google, "_request", fake_request)
+    conn = engine.connect()
+    try:
+        assert google._push_changes(conn, object(), "token", "primary") == 1
+    finally:
+        conn.close()
+    assert requests[0][0] == "POST"
+    assert requests[0][2]["payload"]["id"] == "lifeos" + fresh["id"].hex
+    with engine.begin() as conn:
+        created = conn.execute(sa.select(s.calendar_events).where(s.calendar_events.c.id == fresh["id"])).mappings().one()
+        conn.execute(sa.update(s.calendar_events).where(s.calendar_events.c.id == fresh["id"]).values(sync_state="deleted", deleted_at=s.now()))
+    conn = engine.connect()
+    try:
+        assert google._push_changes(conn, object(), "token", "primary") == 1
+    finally:
+        conn.close()
+    assert requests[-1][0] == "DELETE"
+    with engine.connect() as conn:
+        assert conn.execute(sa.select(s.calendar_events.c.sync_state).where(s.calendar_events.c.id == fresh["id"])).scalar_one() == "synced"
+
+
+def test_google_configuration_and_oauth_state(client, monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("PUBLIC_API_URL", "https://life.example")
+    configured = client.post("/api/integrations/google/config", json={"calendar_id": "primary", "transport": "poll", "poll_minutes": 15})
+    assert configured.status_code == 200
+    started = client.get("/api/integrations/google/auth/start")
+    assert started.status_code == 200
+    assert "accounts.google.com" in started.json()["authorization_url"]
+    assert "code_challenge=" in started.json()["authorization_url"]
+    status = client.get("/api/integrations/status").json()["google"]
+    assert status["configured"] is True and status["calendar_id"] == "primary" and status["connected"] is False
+    with engine.connect() as conn:
+        pending = json.loads(get_secret(conn, "google_oauth_pending"))
+    assert pending["state"] and pending["verifier"] and pending["expires_at"]
+
+
+def test_google_pushes_local_recurrence_exception_by_patching_instance(client, monkeypatch):
+    from app.integrations import google
+
+    stamp = datetime(2026, 10, 4, 9, tzinfo=timezone.utc)
+    with engine.begin() as conn:
+        master = conn.execute(sa.insert(s.calendar_events).values(
+            title="Weekly lab", description="", starts_at=stamp - timedelta(days=7),
+            ends_at=stamp - timedelta(days=7) + timedelta(hours=1), timezone="UTC",
+            recurrence=["RRULE:FREQ=WEEKLY"], google_event_id="master-google",
+            etag="master-etag", sync_state="synced",
+        ).returning(s.calendar_events)).mappings().one()
+        exception = conn.execute(sa.insert(s.calendar_events).values(
+            title="Moved lab", description="", starts_at=stamp + timedelta(hours=2),
+            ends_at=stamp + timedelta(hours=3), timezone="UTC", master_id=master["id"],
+            original_start=stamp, sync_state="local",
+        ).returning(s.calendar_events)).mappings().one()
+    requests = []
+    def fake_request(_client, method, url, token, **kwargs):
+        requests.append((method, url, kwargs))
+        if method == "GET":
+            return {"items": [{"id": "instance-google", "etag": "instance-etag"}]}
+        return {"id": "instance-google", "etag": "saved-etag"}
+    monkeypatch.setattr(google, "_request", fake_request)
+    conn = engine.connect()
+    try:
+        assert google._push_changes(conn, object(), "token", "primary") == 1
+    finally:
+        conn.close()
+    assert requests[0][0] == "GET" and google._dt(requests[0][2]["params"]["originalStart"]) == stamp
+    assert requests[1][0] == "PATCH" and requests[1][1].endswith("/instance-google")
+    assert "recurringEventId" not in requests[1][2]["payload"]
+    with engine.connect() as conn:
+        saved = conn.execute(sa.select(s.calendar_events).where(s.calendar_events.c.id == exception["id"])).mappings().one()
+    assert saved["google_event_id"] == "instance-google" and saved["sync_state"] == "synced"
+
+
 def test_all_fifteen_worked_solutions():
     from app.curriculum import PATTERNS
 
@@ -1274,3 +1421,29 @@ def test_assistant_deleted_insight_is_purged_from_undo(client):
         batch=conn.execute(sa.select(s.assistant_batches).where(s.assistant_batches.c.id==uuid.UUID(result['batch_id']))).mappings().one()
         assert batch['changes']==[] and batch['status']=='purged'
     assert client.get('/api/data/journal_entries').json()[0]['body']=='Summary'
+
+
+def test_morning_brief_excludes_future_samples_and_non_samsung_water(client, monkeypatch):
+    from app.services import setting
+    from app.assistant import morning_context
+    at=datetime(2026,9,14,3,30,tzinfo=timezone.utc)
+    monkeypatch.setattr(s,'now',lambda:at)
+    with engine.begin() as conn:
+        setting(conn,'timezone','Asia/Kolkata')
+        setting(conn,'water_source','samsung_health')
+        for metric,value,stamp,source in [
+            ('steps',100,at-timedelta(hours=1),'watch'),
+            ('steps',999,at+timedelta(hours=1),'watch'),
+            ('sleep',8,at-timedelta(hours=1),'watch'),
+            ('sleep',99,at+timedelta(hours=1),'watch'),
+            ('water',250,at-timedelta(days=1),'hc-webhook-samsung-water'),
+            ('water',900,at-timedelta(hours=1),'manual'),
+            ('water',900,at-timedelta(days=1),'manual'),
+        ]:
+            conn.execute(sa.insert(s.health_records).values(metric=metric,value=value,unit='test',recorded_at=stamp,source=source,device='test',external_id=str(uuid.uuid4())))
+    result=morning_context()
+    latest={r['metric']:r['value'] for r in result['latest_metric_readings']}
+    assert latest=={'steps':100,'sleep':8,'water':250}
+    assert [r['value'] for r in result['sleep_records_since_yesterday_noon']]==[8]
+    water=[r for r in result['yesterday_activity_by_source'] if r['metric']=='water']
+    assert len(water)==1 and water[0]['source']=='hc-webhook-samsung-water' and water[0]['sum']==250

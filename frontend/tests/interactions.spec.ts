@@ -60,6 +60,7 @@ test("confirmed task, journal and concept-review feedback with safe busy and err
 
     const note = await create("concept_notes", { title: "Motion concept " + suffix, front: "What does a pointer represent?", back: "A position in a sequence.", due_on: "2000-01-01" });
     await page.getByRole("button", { name: "DSA in Python", exact: true }).click();
+    await page.getByRole("button", { name: "Learning path", exact: true }).click();
     await page.getByRole("button", { name: "Two pointers", exact: true }).click();
     await page.getByRole("button", { name: "Next step", exact: true }).click();
     await expect(page.locator(".step-caption")).toContainText("1 + 7 = 8");

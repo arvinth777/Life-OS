@@ -199,7 +199,8 @@ def search_context(query='', table='tasks', limit=20):
 
 def morning_context():
     with engine.connect() as conn:
-        tz=ZoneInfo(config(conn).get('timezone','Asia/Kolkata'))
+        cfg=config(conn)
+        tz=ZoneInfo(cfg.get('timezone','Asia/Kolkata'))
         at=s.now(); today=at.astimezone(tz).date()
         start=datetime.combine(today,time.min,tzinfo=tz); end=start+timedelta(days=1); yesterday=start-timedelta(days=1)
         def fetch(q): return [dict(r) for r in conn.execute(q).mappings()]
@@ -208,11 +209,12 @@ def morning_context():
         event_rows=fetch(sa.select(s.calendar_events).where(s.calendar_events.c.deleted_at.is_(None),s.calendar_events.c.starts_at<end,sa.or_(s.calendar_events.c.ends_at>start,s.calendar_events.c.recurrence!=[],s.calendar_events.c.master_id.is_not(None))).limit(501))
         events=calendar_occurrences(event_rows[:500],start,end)
         h=s.health_records
+        source_filter=sa.true() if cfg.get('water_source')!='samsung_health' else sa.or_(h.c.metric!='water',h.c.source=='hc-webhook-samsung-water')
         # Summaries stay separated by metric, unit and source: adding multiple providers
         # would double count overlapping records. Latest point readings aren't daily totals.
-        activity=fetch(sa.select(h.c.metric,h.c.unit,h.c.source,sa.func.sum(h.c.value).label('sum'),sa.func.min(h.c.recorded_at).label('first_at'),sa.func.max(h.c.recorded_at).label('last_at')).where(h.c.recorded_at>=yesterday,h.c.recorded_at<start,h.c.metric.in_(['steps','water','distance','active_calories','total_calories'])).group_by(h.c.metric,h.c.unit,h.c.source))
-        sleep=fetch(sa.select(h.c.metric,h.c.value,h.c.unit,h.c.source,h.c.recorded_at).where(h.c.metric=='sleep',h.c.recorded_at>=yesterday+timedelta(hours=12),h.c.recorded_at<end).order_by(h.c.recorded_at.desc()).limit(30))
-        latest=fetch(sa.select(h.c.metric,h.c.value,h.c.unit,h.c.source,h.c.recorded_at).where(~h.c.metric.startswith('samsung_raw/')).distinct(h.c.metric).order_by(h.c.metric,h.c.recorded_at.desc()).limit(50))
+        activity=fetch(sa.select(h.c.metric,h.c.unit,h.c.source,sa.func.sum(h.c.value).label('sum'),sa.func.min(h.c.recorded_at).label('first_at'),sa.func.max(h.c.recorded_at).label('last_at')).where(source_filter,h.c.recorded_at>=yesterday,h.c.recorded_at<start,h.c.metric.in_(['steps','water','distance','active_calories','total_calories'])).group_by(h.c.metric,h.c.unit,h.c.source))
+        sleep=fetch(sa.select(h.c.metric,h.c.value,h.c.unit,h.c.source,h.c.recorded_at).where(h.c.metric=='sleep',h.c.recorded_at>=yesterday+timedelta(hours=12),h.c.recorded_at<=at).order_by(h.c.recorded_at.desc()).limit(30))
+        latest=fetch(sa.select(h.c.metric,h.c.value,h.c.unit,h.c.source,h.c.recorded_at).where(source_filter,h.c.recorded_at<=at,~h.c.metric.startswith('samsung_raw/')).distinct(h.c.metric).order_by(h.c.metric,h.c.recorded_at.desc()).limit(50))
         synced=conn.execute(sa.select(sa.func.max(s.integration_runs.c.created_at)).where(s.integration_runs.c.provider=='health-webhook',s.integration_runs.c.status.in_(['ok','partial']))).scalar_one()
         goals=fetch(sa.select(s.goals).where(s.goals.c.status=='active').order_by(s.goals.c.target_date.asc().nullslast()).limit(20))
         topics=fetch(sa.select(s.learning_topics).where(s.learning_topics.c.status!='retired').order_by(s.learning_topics.c.updated_at.desc()).limit(15))

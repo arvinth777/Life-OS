@@ -22,7 +22,7 @@ The private ChatGPT Life OS project opts in to relevant tracking. Other chats ne
 | ChatGPT cloud scheduled tasks | Cannot run the connector or in project-only memory | Keep on-demand brief usable; explicitly report the scheduling limitation rather than claim automation |
 | Vercel Hobby / Neon Free | Cold start, limits, outage | Bounded stateless requests, durable retries; existing manual app and backups |
 | Phone Health Connect bridge | Delayed or absent readings | Brief reports timestamps/missing metrics; phone is only the watch-data relay |
-| Google Calendar | Connection not configured | Use events already stored in Life OS; do not claim Google is synced |
+| Google Calendar | Transport is implemented; owner OAuth credentials and a designated calendar are required | Use events already stored in Life OS until the Settings connection reports connected |
 
 ## Verification gates
 
