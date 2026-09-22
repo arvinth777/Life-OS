@@ -133,7 +133,7 @@ The initial Alembic revision loads an immutable schema snapshot. Future schema e
 
 ## Free hosting: two application deployables
 
-The static frontend can run on Sites. The Python API must run on a Python host. Managed Postgres is the datastore, separate from these two application deployables. No production API or database was provisioned by this task. See `docs/STATUS.md` for actual publication state.
+The static frontend is published with Sites. The FastAPI backend runs on Vercel and Neon supplies managed Postgres. These remain two application deployables plus the database service. See `docs/STATUS.md` for the current verified production boundary.
 
 **1. Permanent database (Neon).** Create a free Neon project at [Neon](https://neon.com). Create the `life_os` database and copy the standard Postgres connection string with TLS enabled. Set it as the API's `DATABASE_URL`. Do not put this URL into frontend settings. Free plans have quotas; check [current plan details](https://neon.com/pricing).
 

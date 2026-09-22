@@ -1447,3 +1447,47 @@ def test_morning_brief_excludes_future_samples_and_non_samsung_water(client, mon
     assert [r['value'] for r in result['sleep_records_since_yesterday_noon']]==[8]
     water=[r for r in result['yesterday_activity_by_source'] if r['metric']=='water']
     assert len(water)==1 and water[0]['source']=='hc-webhook-samsung-water' and water[0]['sum']==250
+
+
+def test_exam_timetable_weekly_review_connection_health_and_schedule(client):
+    from app.assistant import ExamTimetable, exam_timetable_batch, weekly_context, apply_batch
+    term=create(client,'terms',name='Autumn',starts_on='2026-09-01',ends_on='2026-12-31')
+    course=create(client,'courses',term_id=term['id'],name='Cloud Computing',credits=3)
+    timetable=ExamTimetable.model_validate({
+        'request_key':'exam-timetable-2026-autumn',
+        'exams':[{
+            'course_id':course['id'],'import_key':'cloud-final-2026',
+            'title':'Cloud Computing final','starts_at':'2026-12-10T09:00:00+05:30',
+            'ends_at':'2026-12-10T12:00:00+05:30','timezone':'Asia/Kolkata',
+            'notes':'Room to be confirmed',
+        }],
+    })
+    preview=apply_batch(exam_timetable_batch(timetable),preview=True)
+    assert preview['preview'] and len(preview['receipts'])==2
+    saved=apply_batch(exam_timetable_batch(timetable))
+    assert saved['status']=='applied'
+    duplicate=apply_batch(exam_timetable_batch(timetable))
+    assert duplicate['duplicate']
+    assert len(client.get('/api/data/exams').json())==1
+    assert len(client.get('/api/data/calendar_events').json())==1
+
+    task=create(client,'tasks',title='Completed this week',priority=2)
+    assert client.post('/api/tasks/'+task['id']+'/complete').status_code==200
+    create(client,'journal_entries',title='Weekly note',body='A concise note')
+    create(client,'workouts',title='Strength session')
+    weekly=weekly_context()
+    assert weekly['completed_tasks']==1 and weekly['journal_entries']==1 and weekly['workouts']==1
+    assert weekly['timezone']=='UTC'
+
+    with engine.begin() as conn:
+        conn.execute(sa.insert(s.integration_runs).values(provider='health-webhook',status='ok',detail='Phone sync received',cursor={}))
+    health=client.get('/api/integrations/status').json()['connection_health']
+    assert health['phone']['status']=='ok' and health['google_calendar'] is None
+
+    assert client.get('/api/assistant/connection').json()['schedule_verified'] is False
+    assert client.post('/api/assistant/schedule-verification',json={'verified':True}).status_code==200
+    assert client.get('/api/assistant/connection').json()['schedule_verified'] is True
+    anonymous=TestClient(app)
+    assert 'Personal workspace' in anonymous.get('/').text
+    assert 'does not sell data' in anonymous.get('/privacy').text
+    assert 'provided as-is' in anonymous.get('/terms').text

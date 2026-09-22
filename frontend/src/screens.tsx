@@ -12,7 +12,7 @@ import {
   Download,
   Upload,
 } from "lucide-react";
-import { api, base, fmt, title } from "./api";
+import { api, base, clearAuthToken, fmt, title } from "./api";
 import {
   Editor,
   Panel,
@@ -656,7 +656,7 @@ export function SettingsPage(p: any) {
     setBusy(true);
     try {
       await restoreBackup(file);
-      sessionStorage.removeItem("life-os-token");
+      clearAuthToken();
       window.dispatchEvent(new Event("signed-out"));
     } catch (e) {
       setError(e.message);
@@ -710,6 +710,19 @@ export function SettingsPage(p: any) {
         <Records {...p} table="reminder_rules" />
       ) : tab === "integrations" ? (
         <>
+          <Panel title="Connection health">
+            <div className="connection-health">
+              {[
+                ["Phone bridge", status.connection_health?.phone],
+                ["Samsung cloud", status.connection_health?.samsung_cloud],
+                ["Google Calendar", status.connection_health?.google_calendar],
+              ].map(([label, run]: any) => <div className="health-row" key={label}>
+                <span className={run?.status === "ok" || run?.status === "partial" ? "health-dot healthy" : run ? "health-dot attention" : "health-dot idle"} />
+                <div><strong>{label}</strong><small>{run ? `${run.detail} · ${fmt(run.created_at)}` : "No completed run yet"}</small></div>
+              </div>)}
+            </div>
+            <p className="muted">This shows delivery freshness. A connected service can still be stale if the phone or free host has not run recently.</p>
+          </Panel>
           <div className="connection-grid">
             <Panel title="AI assistance">
               <p>

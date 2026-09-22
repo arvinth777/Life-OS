@@ -16,7 +16,7 @@ import {
   ArrowRight,
   PanelLeft,
 } from "lucide-react";
-import { api, base, setBase, setZone, fmt } from "./api";
+import { api, authToken, base, clearAuthToken, saveAuthToken, setBase, setZone, fmt } from "./api";
 import {
   Editor,
   Panel,
@@ -59,9 +59,7 @@ const subtitles: any = {
   settings: "Preferences, connections, reminders, and backups.",
 };
 export default function App() {
-  const [session, setSession] = useState(
-    !!sessionStorage.getItem("life-os-token"),
-  );
+  const [session, setSession] = useState(!!authToken());
   const [page, setPage] = useState(location.hash.slice(1) || "home");
   const [schema, setSchema] = useState<any>({});
   const [settings, setSettings] = useState<Record<string, any>>({});
@@ -78,7 +76,7 @@ export default function App() {
   useEffect(() => {
     const listener = () => setPage(location.hash.slice(1) || "home");
     const out = () => {
-      sessionStorage.removeItem("life-os-token");
+      clearAuthToken();
       setSession(false);
     };
     window.addEventListener("hashchange", listener);
@@ -175,7 +173,7 @@ export default function App() {
             className="nav-item"
             onClick={async () => {
               await api("/auth/logout", "POST").catch(() => {});
-              sessionStorage.removeItem("life-os-token");
+              clearAuthToken();
               setSession(false);
             }}
           >
@@ -275,7 +273,7 @@ function Login({ onLogin }: any) {
         username: user,
         password: pass,
       });
-      sessionStorage.setItem("life-os-token", data.token);
+      saveAuthToken(data.token);
       onLogin();
     } catch (e) {
       setError(e.message);

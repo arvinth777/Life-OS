@@ -2,6 +2,17 @@
 
 22 September 2026. This document separates running features from scaffolding. No integration is represented as live merely because a configuration field exists.
 
+## Personal release verification — 22 September 2026
+
+- The Google OAuth app is **In production**. The owner reconnected `arvinth273@gmail.com` after publishing, replacing the seven-day Testing credential.
+- A real Google Calendar round trip passed against the designated `primary` calendar: Life OS created the 09:00–09:15 Asia/Kolkata test event, Google showed it, a Google-side title edit synced back with **1 pulled**, and Life OS displayed the edited title.
+- The owner timezone is **Asia/Kolkata**, so streak boundaries and dated views use local midnight.
+- The ChatGPT Life OS connection is authorized. A visible cloud task named **Life OS Morning Brief** is active every day at **09:00 Asia/Kolkata**, beginning 23 September 2026, and uses the Life OS source.
+- Exam timetable preview/save tools, the seven-day review context, connection-health summaries, and login continuity across tabs/reloads are implemented.
+- A production backup ZIP was downloaded from Settings and passed archive-integrity validation: 102 entries, 22,369,654 compressed bytes, 111,289,841 uncompressed bytes. It was not restored over production.
+- The full backend suite passes **42 tests** against disposable PostgreSQL, and the production React build passes.
+- The visibly incomplete DSA lessons remain intentionally deferred while the owner chooses learning resources. Existing tracking remains available.
+
 ## Phase 1
 
 Implemented and running locally against real PostgreSQL: all nine modules, single-owner Argon2/JWT authentication, Alembic migrations, seeded curriculum and exercise library, in-app reminders, and complete CSV/JSON export/import. With the owner's explicit approval, migrations 0001–0002, seed and owner bootstrap were applied to Neon production after verification on a temporary branch. That test branch was deleted. Database connection and encryption key are in Vercel's encrypted environment settings. The API was deployed to the verified Hobby account and Vercel reports **Ready** at `https://life-os-api-six.vercel.app`. Local owner credentials also work for the separately initialized online owner. The frontend build targets that API; Sites deployment status is tracked separately in the delivery response. No personal journal, task or health history was copied from the local database. The separate Neon Hello function remains a demonstration and is not used by Life OS.
@@ -20,7 +31,7 @@ Live verification boundary: database migrations, seed counts and owner bootstrap
 | No external integrations required | Missing-key tutor/feedback states are disabled; every module remains navigable. Core route checks run without LLM or wearable configuration. |
 | Forward migrations require no manual SQL | Alembic 0001 creates the initial schema; 0002 adds encrypted backup transfers. Both are explicit forward migrations. Legacy 0001 backups remain restorable. |
 
-Verification: **41 backend acceptance tests passed** against disposable PostgreSQL. The current end-to-end browser suite passed four active workflows covering all nine modules, hydration, watch data, interaction states, and views at **320, 375, 414, 768 and 1440 px**; the isolated chunked-backup browser test passed in its dedicated earlier run. A genuine mobile overflow from a table's hidden accessibility label was corrected before the original pass. The React production build passes. The original frontend runtime dependency audit reported zero advisories; dependencies have not changed. Two harmless dependency deprecation warnings remain; they do not fail tests.
+Verification: **42 backend acceptance tests passed** against disposable PostgreSQL. The current end-to-end browser suite passed four active workflows covering all nine modules, hydration, watch data, interaction states, and views at **320, 375, 414, 768 and 1440 px**; the isolated chunked-backup browser test passed in its dedicated earlier run. A genuine mobile overflow from a table's hidden accessibility label was corrected before the original pass. The React production build passes. The original frontend runtime dependency audit reported zero advisories; dependencies have not changed. Two harmless dependency deprecation warnings remain; they do not fail tests.
 
 Visual inspection covered the loaded desktop dashboard, with a workbench layout, cobalt active controls, clearly separated tasks/agenda, and a functional reading surface. Browser geometry checks cover the mobile routes. No fake personal history is seeded. Temporary QA records are removed from the local workspace after tests.
 
@@ -31,7 +42,7 @@ Visual inspection covered the loaded desktop dashboard, with a workbench layout,
 | Manual normalized ingestion | Wired, owner authenticated, atomic and idempotent. Water entry is disabled when the owner chooses Samsung-only water; fresh installs default to manual. |
 | Health Connect webhook | Receiver, separate bearer authentication, mapping editor/preview, nested-field normalization, multiple configured streams, dedupe and body-metric suggestions implemented. Synthetic checks pass. The physical phone saved 9,422 readings and reported success; the next delivery recognized 1,039 duplicates. Unverifiable distance rows were omitted and reported. Steps, heart rate, oxygen saturation and sleep/stages are confirmed; hydration and background delivery remain unverified. |
 | LLM journal/tutor | Shared OpenAI adapter, encrypted key, explicit actions, stored feedback/usage implemented. Disabled by default. **No live inference call tested**; no provider key provisioned. |
-| Google Calendar | Local calendar works. OAuth with PKCE/state, encrypted refresh tokens, one-calendar configuration, incremental pull/full 410 recovery, resumable page checkpoints, two-way create/update/delete, etag retry, timestamp conflict logs, recurring masters/exceptions, polling catch-up and validated push channels are implemented and covered by mocked transport tests. A real Google account/calendar authorization is still required for live verification. |
+| Google Calendar | Connected to the owner's `primary` calendar with encrypted refresh credentials. The OAuth app is In production. A real create → Google edit → pull-back round trip passed. Incremental pull/full 410 recovery, resumable page checkpoints, two-way create/update/delete, etag retry, timestamp conflict logs, recurring masters/exceptions, polling catch-up and validated push channels remain covered by automated tests. |
 | Samsung private cloud | Pinned 0.7.1 client, encrypted account/session/cursor storage, macOS sign-in helper and bounded GET importer implemented. Real account authorization and raw cloud retrieval work. Stress is unavailable from the catalog route. Field units and complete coverage remain unverified. |
 | Open Wearables | Decision/status scaffold only. No mobile companion, SDK pin, Wearables backend or MCP connection built. Deferred pending webhook insufficiency. |
 
@@ -41,7 +52,7 @@ Eight visibly incomplete lessons: Stacks and queues; Linked lists; Recursion fro
 
 ## Remaining limits
 
-- Vercel API deployment is Ready and real phone ingestion is verified. Long-term unattended operation, real Google accounts, phone hydration, Android background delivery and complete Samsung Cloud coverage/units remain unverified.
+- Vercel API deployment is Ready, the real Google round trip passed, and real phone ingestion is verified. Long-term unattended operation, phone hydration, Android background delivery and complete Samsung Cloud coverage/units remain unverified.
 - CSV files intentionally use JSON-encoded cells to preserve exact values. They are designed for lossless restore, not automatic spreadsheet-type guessing.
 - Health sum metrics expect nonoverlapping increments. The app cannot deduplicate overlapping readings from *different* sources using a contract that only keys by source and external ID. Select one active source per overlapping metric/window.
 - Most reference/admin data use consistent table editors; nested curriculum/mapping/recurrence data use documented JSON fields. Body metrics, grading bands and everyday actions have ordinary labeled controls.
@@ -60,4 +71,4 @@ The live receiver token, Samsung mapping and Samsung-only water preference were 
 
 Migration 0003 adds private OAuth state, change receipts, learning topics/sessions and course-linked exams. It passed a fresh empty PostgreSQL migration and an isolated schema-only Neon migration before production. The existing production health-record count was unchanged. The MCP API deployment reports Ready. The full 41-test acceptance suite and production frontend build pass. OAuth PKCE/code replay, refresh rotation/revocation, unauthenticated calls, atomic batches, retries, later-edit-safe undo, CSV round-trip, older backup restoration and journal/insight deletion privacy are covered locally.
 
-The ChatGPT Life OS project exists with project-only memory. Private connector registration and a real ChatGPT tool call are pending verification. **The requested 09:00 Asia/Kolkata cloud brief is not yet scheduled.** The website displays that distinction. Mobile-client support, automatic project tool attachment, scheduling with a private connector and actual real-world timetable imports remain untested. A private GPT Actions fallback has not been activated. No paid model API is used.
+The ChatGPT Life OS project exists with project-only memory. The private connector is authorized and appears as the Life OS source. **The requested 09:00 Asia/Kolkata cloud brief is active**, beginning 23 September 2026. Exam timetable tools and the weekly-review context are available; an actual timetable import and the first scheduled run remain untested. Mobile-client support and automatic attachment outside opted-in Life OS chats remain untested. No paid model API is used.

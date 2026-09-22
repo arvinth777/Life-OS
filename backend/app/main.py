@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError, DataError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from fastapi import FastAPI, Depends, HTTPException, Request, Body, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 from .db import engine
@@ -53,6 +53,25 @@ app.include_router(assistant_auth_router)
 from .transfers import router as transfer_router
 from .integrations.samsung import router as samsung_router
 from .integrations.google import router as google_router
+
+
+def public_page(title: str, body: str):
+    return HTMLResponse(f"""<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>{title} · Life OS</title><style>body{{max-width:720px;margin:64px auto;padding:0 24px;font:16px/1.65 system-ui;color:#17213b;background:#f7f8fc}}h1{{font-size:36px}}a{{color:#1646c0}}.card{{background:white;border:1px solid #dfe3ef;border-radius:16px;padding:28px}}</style><main class=card><p><a href='/'>Life OS</a></p><h1>{title}</h1>{body}<p><a href='/privacy'>Privacy</a> · <a href='/terms'>Terms</a></p></main></html>""")
+
+
+@app.get('/', response_class=HTMLResponse, include_in_schema=False)
+def public_home():
+    return public_page('Personal workspace', "<p>Life OS is a private, single-owner workspace for tasks, study, journaling, health records and one designated Google Calendar. It is not offered as a public service and has no user registration.</p><p><a href='https://life-os-personal-workbench.arvinth273.chatgpt.site/'>Open the private app</a></p>")
+
+
+@app.get('/privacy', response_class=HTMLResponse, include_in_schema=False)
+def privacy_page():
+    return public_page('Privacy policy', "<p>Life OS is used only by its owner. Calendar data is accessed solely to display and synchronize events requested by the owner. Personal records remain in the owner's private PostgreSQL database. Life OS does not sell data, run advertising, or share Google user data with third parties.</p><p>OAuth credentials are encrypted at rest. The owner can disconnect Google Calendar in Life OS settings or revoke access in their Google Account. Disconnecting stops future access while preserving local records until the owner deletes them.</p><p>Contact: arvinth273@gmail.com</p>")
+
+
+@app.get('/terms', response_class=HTMLResponse, include_in_schema=False)
+def terms_page():
+    return public_page('Terms of use', "<p>Life OS is a personal application provided for its owner's own use. It is provided as-is, without availability guarantees. The owner is responsible for reviewing synchronized events, maintaining backups, and protecting account credentials.</p><p>Google Calendar access is limited to the calendar selected by the owner and can be revoked at any time.</p><p>Contact: arvinth273@gmail.com</p>")
 
 app.include_router(transfer_router)
 app.include_router(samsung_router)
@@ -780,11 +799,24 @@ def integration_status():
         names = set(conn.execute(sa.select(s.secrets.c.name)).scalars())
         usage = rows(conn, "ai_usage")
         google = google_status(conn)
+        latest_runs = {}
+        for provider in ("health-webhook", "samsung-cloud", "google-calendar"):
+            run = conn.execute(
+                sa.select(s.integration_runs.c.status, s.integration_runs.c.detail, s.integration_runs.c.created_at)
+                .where(s.integration_runs.c.provider == provider)
+                .order_by(s.integration_runs.c.created_at.desc()).limit(1)
+            ).mappings().first()
+            latest_runs[provider] = dict(run) if run else None
     return {
         "llm_configured": "llm_api_key" in names,
         "health_configured": "health_webhook_token" in names,
         "samsung_connected": "samsung_master" in names,
         "google": google,
+        "connection_health": {
+            "phone": latest_runs["health-webhook"],
+            "samsung_cloud": latest_runs["samsung-cloud"],
+            "google_calendar": latest_runs["google-calendar"],
+        },
         "samsung": "Samsung account linked; private cloud import available" if "samsung_master" in names else "Samsung account sign-in needed for private cloud readings",
         "open_wearables": "Deferred; companion app not built",
         "input_tokens": sum(r["input_tokens"] for r in usage),

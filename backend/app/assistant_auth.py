@@ -18,6 +18,7 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from . import schema as s
 from .db import engine
 from .security import cipher, digest, owner
+from .services import config, setting
 
 BASE=os.getenv('ASSISTANT_PUBLIC_URL','https://life-os-api-six.vercel.app').rstrip('/')
 RESOURCE=BASE+'/mcp'
@@ -154,7 +155,16 @@ def approve(payload:dict):
 def connection_status():
     with engine.connect() as conn:
         count=conn.execute(sa.select(sa.func.count()).select_from(s.assistant_oauth).where(s.assistant_oauth.c.kind=='family',s.assistant_oauth.c.expires_at>s.now())).scalar_one()
-    return {'authorized_connections':count,'mcp_url':RESOURCE,'morning_time':'09:00','timezone':'Asia/Kolkata','schedule_verified':False}
+        schedule=config(conn).get('assistant_schedule',{})
+    return {'authorized_connections':count,'mcp_url':RESOURCE,'morning_time':'09:00','timezone':'Asia/Kolkata','schedule_verified':bool(schedule.get('verified_at')),'schedule_verified_at':schedule.get('verified_at')}
+
+
+@router.post('/schedule-verification',dependencies=[Depends(owner)])
+def verify_schedule(payload:dict):
+    verified=bool(payload.get('verified',True))
+    with engine.begin() as conn:
+        setting(conn,'assistant_schedule',{'time':'09:00','timezone':'Asia/Kolkata','verified_at':s.now().isoformat() if verified else None})
+    return {'schedule_verified':verified}
 
 
 @router.post('/disconnect',dependencies=[Depends(owner)])

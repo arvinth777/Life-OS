@@ -1,4 +1,4 @@
-import { api, base } from "./api";
+import { api, authToken, base } from "./api";
 
 async function sha256(bytes: ArrayBuffer) {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -9,7 +9,7 @@ async function chunk(path: string, body?: Blob) {
   const response = await fetch(base + "/api" + path, {
     method: body ? "POST" : "GET",
     headers: {
-      Authorization: "Bearer " + sessionStorage.getItem("life-os-token"),
+      Authorization: "Bearer " + authToken(),
       "Content-Type": "application/octet-stream",
     },
     body,

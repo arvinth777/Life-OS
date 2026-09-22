@@ -38,7 +38,7 @@ Weight and height from a nonmanual source produce suggestion rows when different
 
 The LLM adapter sends explicit journal-feedback and current-lesson tutor requests to one OpenAI key. It stores per-call provider/model/input/output usage and journal feedback separately. Tutor messages are conversation-local in the browser; only token usage is stored. It never advances through a lesson automatically. Missing configuration produces a clear disabled state. No paid key was provisioned and no live inference request was made during verification.
 
-## Google Calendar: implemented, awaiting real-account authorization
+## Google Calendar: connected and round-trip verified
 
 The local calendar remains fully usable without Google. The optional transport in `app/integrations/google.py` is implemented around one owner-designated calendar and never enumerates or syncs every calendar.
 
@@ -51,7 +51,7 @@ The local calendar remains fully usable without Google. The optional transport i
 - Poll mode defaults to 15 minutes and catches up during authenticated digest/app requests. Push mode provisions renewable Google notification channels, validates channel/resource/token headers, and then runs the same incremental pull because notifications contain no event body.
 - A PostgreSQL advisory lock permits one bounded sync pass at a time. Each page and push acknowledgement commits independently, so a cold start or interrupted request resumes safely.
 
-Automated tests cover incremental paging, token invalidation, equal-timestamp conflict resolution, recurrence exceptions, creates, deletes, OAuth state, and configuration. The remaining verification is an end-to-end run against the owner's real Google OAuth client and designated calendar, including Google-side rate limits and credential expiry. Until that authorization is completed, Settings reports the integration as not connected and local events continue normally.
+Automated tests cover incremental paging, token invalidation, equal-timestamp conflict resolution, recurrence exceptions, creates, deletes, OAuth state, and configuration. On 22 September 2026, the OAuth app was moved to In production, the owner reconnected the personal account, and a real event created in Life OS appeared in Google at 09:00 Asia/Kolkata. A Google-side title edit then returned to Life OS in an incremental pass reporting one pulled event. Rate-limit behavior and long-term credential survival remain operational checks; local events continue normally during Google outages.
 
 Official contracts: [incremental sync](https://developers.google.com/workspace/calendar/api/guides/sync), [push notifications](https://developers.google.com/workspace/calendar/api/guides/push).
 

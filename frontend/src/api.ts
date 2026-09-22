@@ -1,5 +1,22 @@
 export let base =
   import.meta.env.VITE_API_URL || localStorage.getItem("life-os-api") || "";
+const TOKEN_KEY = "life-os-token";
+export function authToken() {
+  const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || "";
+  if (token && !localStorage.getItem(TOKEN_KEY)) {
+    localStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.removeItem(TOKEN_KEY);
+  }
+  return token;
+}
+export function saveAuthToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+export function clearAuthToken() {
+  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+}
 export function setBase(value: string) {
   base = value.replace(/\/$/, "");
   localStorage.setItem("life-os-api", base);
@@ -13,8 +30,7 @@ export async function api(path: string, method = "GET", body?: any) {
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
-        Authorization:
-          "Bearer " + (sessionStorage.getItem("life-os-token") || ""),
+        Authorization: "Bearer " + authToken(),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });

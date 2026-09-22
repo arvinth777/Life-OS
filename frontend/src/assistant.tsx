@@ -16,10 +16,11 @@ export function LearningLog(p: any) {
 export function AssistantSettings(p: any) {
   const [connection,setConnection]=useState<any>();
   const [changes,setChanges]=useState<any[]>([]);
+  const [weekly,setWeekly]=useState<any>();
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
   const [busy,setBusy]=useState(false);
-  useEffect(()=>{Promise.all([api('/assistant/connection'),api('/assistant/changes')]).then(([c,h])=>{setConnection(c);setChanges(h)}).catch(e=>setError(e.message))},[p.refresh]);
+  useEffect(()=>{Promise.all([api('/assistant/connection'),api('/assistant/changes'),api('/assistant/weekly')]).then(([c,h,w])=>{setConnection(c);setChanges(h);setWeekly(w)}).catch(e=>setError(e.message))},[p.refresh]);
   async function action(path:string,success:string) {
     setBusy(true);setError('');
     try {await api(path,'POST',{});setMessage(success);p.onRefresh()}
@@ -40,7 +41,22 @@ export function AssistantSettings(p: any) {
     <Panel title="Morning brief">
       <strong>Every day · 9:00 am · India time</strong>
       <p>{connection?.schedule_verified ? 'Scheduled in ChatGPT.' : 'Preferred time saved. The ChatGPT schedule has not been verified yet.'}</p>
+      {!connection?.schedule_verified&&<button disabled={busy} onClick={()=>action('/assistant/schedule-verification','The active ChatGPT schedule is now recorded as verified.')}>Mark verified</button>}
       <p className="muted">A brief uses saved plans and dated readings. Missing or delayed watch data is labelled, never filled in.</p>
+    </Panel>
+    <Panel title="Weekly review">
+      <p>ChatGPT can now review a dated seven-day snapshot without a separate AI key.</p>
+      {weekly&&<div className="metric-strip">
+        <span><strong>{weekly.completed_tasks}</strong><small>tasks completed</small></span>
+        <span><strong>{weekly.learning_sessions}</strong><small>learning sessions</small></span>
+        <span><strong>{weekly.workouts}</strong><small>workouts</small></span>
+        <span><strong>{weekly.journal_entries}</strong><small>journal entries</small></span>
+      </div>}
+      <p className="muted">In the Life OS project, ask “Use Life OS to review my week.” It will label missing or stale watch data and suggest no more than three priorities.</p>
+    </Panel>
+    <Panel title="Exam timetable assistant">
+      <p>Share a timetable in the Life OS project. ChatGPT can match existing courses, preview linked exam and calendar records, and save them only after you approve the dates.</p>
+      <p className="muted">Ambiguous course names, dates, times, and timezones must be clarified. Reusing the same timetable import key prevents duplicates.</p>
     </Panel>
     <Panel title="Saved from ChatGPT">
       {!changes.length&&<Empty text="Change receipts will appear here when ChatGPT saves something." />}

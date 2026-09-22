@@ -37,6 +37,54 @@ class Batch(BaseModel):
     operations: list[Operation] = Field(min_length=1, max_length=30)
 
 
+class ExamDraft(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    course_id: uuid.UUID
+    import_key: str = Field(min_length=4, max_length=150)
+    title: str = Field(min_length=1, max_length=200)
+    starts_at: datetime
+    ends_at: datetime
+    timezone: str = Field(default='Asia/Kolkata', max_length=80)
+    all_day: bool = False
+    notes: str = Field(default='', max_length=2000)
+
+
+class ExamTimetable(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    request_key: str = Field(min_length=8, max_length=150)
+    exams: list[ExamDraft] = Field(min_length=1, max_length=15)
+    chat_url: str | None = Field(default=None, max_length=500)
+
+
+def exam_timetable_batch(timetable: ExamTimetable) -> Batch:
+    operations = []
+    for index, exam in enumerate(timetable.exams):
+        event_label = f'exam_event_{index}'
+        operations.extend([
+            Operation(action='create', table='calendar_events', label=event_label, data={
+                'title': exam.title,
+                'description': exam.notes,
+                'starts_at': exam.starts_at,
+                'ends_at': exam.ends_at,
+                'timezone': exam.timezone,
+                'all_day': exam.all_day,
+                'recurrence': [],
+            }),
+            Operation(action='create', table='exams', label=f'exam_{index}', data={
+                'event_id': '$' + event_label,
+                'course_id': str(exam.course_id),
+                'import_key': exam.import_key,
+                'notes': exam.notes,
+            }),
+        ])
+    return Batch(
+        request_key=timetable.request_key,
+        summary=f'Import {len(timetable.exams)} exam date' + ('' if len(timetable.exams) == 1 else 's'),
+        chat_url=timetable.chat_url,
+        operations=operations,
+    )
+
+
 def clean(value):
     return json.loads(dumps(value))
 
@@ -221,8 +269,59 @@ def morning_context():
         return clean({'generated_at':at,'timezone':str(tz),'date':today,'tasks':tasks,'assignments':assignments,'calendar':events,'calendar_truncated':len(event_rows)>500,'goals':goals,'learning_topics':topics,'yesterday_activity_by_source':activity,'sleep_records_since_yesterday_noon':sleep,'latest_metric_readings':latest,'last_successful_phone_delivery':synced,'instructions':'Use only dated evidence. Do not combine overlapping sources, call latest samples daily totals, infer sleep from missing records, or invent unavailable stress/water readings. The activity sums describe received records, not guaranteed complete days. Label stale or missing data. Priorities are suggestions; this read does not change tasks.'})
 
 
+def weekly_context():
+    with engine.connect() as conn:
+        cfg = config(conn)
+        tz = ZoneInfo(cfg.get('timezone', 'Asia/Kolkata'))
+        at = s.now()
+        end = datetime.combine(at.astimezone(tz).date() + timedelta(days=1), time.min, tzinfo=tz)
+        start = end - timedelta(days=7)
+        next_end = end + timedelta(days=7)
+        def count(table, *conditions):
+            return conn.execute(sa.select(sa.func.count()).select_from(table).where(*conditions)).scalar_one()
+        h = s.health_records
+        activity = [dict(r) for r in conn.execute(
+            sa.select(h.c.metric, h.c.unit, h.c.source, sa.func.sum(h.c.value).label('sum'),
+                      sa.func.min(h.c.recorded_at).label('first_at'), sa.func.max(h.c.recorded_at).label('last_at'))
+            .where(h.c.recorded_at >= start, h.c.recorded_at < end,
+                   h.c.metric.in_(['steps', 'water', 'distance', 'active_calories', 'total_calories']))
+            .group_by(h.c.metric, h.c.unit, h.c.source)
+        ).mappings()]
+        upcoming_tasks = [dict(r) for r in conn.execute(
+            sa.select(s.tasks).where(s.tasks.c.status != 'done', s.tasks.c.due_at >= end, s.tasks.c.due_at < next_end)
+            .order_by(s.tasks.c.due_at).limit(30)
+        ).mappings()]
+        upcoming_assignments = [dict(r) for r in conn.execute(
+            sa.select(s.assignments).where(s.assignments.c.status != 'done', s.assignments.c.due_at >= end, s.assignments.c.due_at < next_end)
+            .order_by(s.assignments.c.due_at).limit(30)
+        ).mappings()]
+        phone_sync = conn.execute(sa.select(sa.func.max(s.integration_runs.c.created_at)).where(
+            s.integration_runs.c.provider == 'health-webhook', s.integration_runs.c.status.in_(['ok', 'partial'])
+        )).scalar_one()
+        google_sync = conn.execute(sa.select(sa.func.max(s.integration_runs.c.created_at)).where(
+            s.integration_runs.c.provider == 'google-calendar', s.integration_runs.c.status == 'ok'
+        )).scalar_one()
+        return clean({
+            'generated_at': at, 'timezone': str(tz), 'period_start': start, 'period_end': end,
+            'completed_tasks': count(s.tasks, s.tasks.c.status == 'done', s.tasks.c.updated_at >= start, s.tasks.c.updated_at < end),
+            'journal_entries': count(s.journal_entries, s.journal_entries.c.created_at >= start, s.journal_entries.c.created_at < end),
+            'workouts': count(s.workouts, s.workouts.c.performed_at >= start, s.workouts.c.performed_at < end),
+            'learning_sessions': count(s.learning_sessions, s.learning_sessions.c.studied_at >= start, s.learning_sessions.c.studied_at < end),
+            'problems_attempted': count(s.problem_attempts, s.problem_attempts.c.attempted_at >= start, s.problem_attempts.c.attempted_at < end),
+            'activity_by_source': activity,
+            'next_week_tasks': upcoming_tasks,
+            'next_week_assignments': upcoming_assignments,
+            'last_successful_phone_delivery': phone_sync,
+            'last_successful_calendar_sync': google_sync,
+            'instructions': 'Review only saved, dated evidence. Keep sources separate, label stale or missing data, and present wins, friction, and up to three realistic next-week priorities. Do not change records from this read.',
+        })
+
+
 @router.get('/morning')
 def morning_api(): return morning_context()
+
+@router.get('/weekly')
+def weekly_api(): return weekly_context()
 
 @router.post('/preview')
 def preview_api(batch:Batch): return apply_batch(batch,True)
