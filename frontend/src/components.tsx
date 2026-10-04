@@ -86,6 +86,8 @@ export function Modal({ title: heading, onClose, children }: any) {
   );
 }
 const hidden = new Set([
+  "archived",
+  "focus_after",
   "series_id",
   "previous_id",
   "completed_at",

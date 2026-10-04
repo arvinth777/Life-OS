@@ -532,7 +532,7 @@ def test_large_chunked_backup_restore_and_legacy_compatibility(client):
     legacy = dict(
         data,
         schema="0001",
-        tables={k: v for k, v in data["tables"].items() if k not in {"backup_transfers", "assistant_oauth", "assistant_batches", "learning_topics", "learning_sessions", "exams"}},
+        tables={k: v for k, v in data["tables"].items() if k not in {"backup_transfers", "assistant_oauth", "assistant_batches", "learning_topics", "learning_sessions", "exams", "experiments", "experiment_checkins"}},
     )
     legacy["tables"]["alembic_version"] = [{"version_num": "0001"}]
     with engine.begin() as conn:
@@ -540,7 +540,7 @@ def test_large_chunked_backup_restore_and_legacy_compatibility(client):
     with engine.connect() as conn:
         assert (
             conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "0004"
+            == "0005"
         )
 
 
@@ -1405,7 +1405,7 @@ def test_assistant_tables_backup_roundtrip_and_v2_restore(client):
     engine.dispose()
     assert client.get('/api/data/learning_topics').json()[0]['title']=='Backup learning'
     from app.backup import ASSISTANT_TABLES
-    legacy={**data,'schema':'0002','tables':{k:v for k,v in data['tables'].items() if k not in ASSISTANT_TABLES}}
+    legacy={**data,'schema':'0002','tables':{k:v for k,v in data['tables'].items() if k not in ASSISTANT_TABLES | {'experiments','experiment_checkins'}}}
     legacy['tables']['alembic_version']=[{'version_num':'0002'}]
     with engine.begin() as conn: restore(conn,legacy,replace=True)
     assert client.get('/api/data/learning_topics').json()==[]
@@ -1531,7 +1531,7 @@ def test_training_timer_records_and_activity(client):
     assert '2020-01-01' in client.get('/api/activity/physical?year=2020').json()['days']
     with engine.begin() as conn:
         backup = export_data(conn)
-    assert backup['schema'] == '0004'
+    assert backup['schema'] == '0005'
     with engine.begin() as conn:
         restore(conn, parse_backup(archive(backup)), replace=True)
     import copy

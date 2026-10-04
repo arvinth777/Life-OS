@@ -5,12 +5,13 @@ import { LoadingRows, Panel } from './components';
 import { CompleteTask } from './feedback';
 import { NightScene } from './NightScene';
 
+import {taskReady} from './Reset';
 type Source = { data?: any; error?: string; loading?: boolean };
 export const dayKey = (date: string | Date, zone: string) => new Intl.DateTimeFormat('en-CA', {timeZone:zone, year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(date));
 export function rankTasks(tasks: any[], now: Date, zone: string) {
   const today = dayKey(now, zone);
   const bucket = (t: any) => !t.due_at ? 2 : dayKey(t.due_at, zone) < today ? 0 : dayKey(t.due_at, zone) === today ? 1 : 3;
-  return tasks.filter(t => t.status !== 'done').slice().sort((a,b) => bucket(a)-bucket(b) || (b.priority||0)-(a.priority||0) || (a.due_at || '9999').localeCompare(b.due_at || '9999'));
+  return tasks.filter(t => taskReady(t,today)).slice().sort((a,b) => bucket(a)-bucket(b) || (b.priority||0)-(a.priority||0) || (a.due_at || '9999').localeCompare(b.due_at || '9999'));
 }
 export function Overview({refresh, onRefresh, navigate, onQuick, settings}: any) {
   const [sources, setSources] = useState<Record<string, Source>>({});

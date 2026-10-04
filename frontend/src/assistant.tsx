@@ -58,8 +58,8 @@ export function AssistantSettings(p: any) {
       <p>Share a timetable in the Life OS project. ChatGPT can match existing courses, preview linked exam and calendar records, and save them only after you approve the dates.</p>
       <p className="muted">Ambiguous course names, dates, times, and timezones must be clarified. Reusing the same timetable import key prevents duplicates.</p>
     </Panel>
-    <Panel title="Saved from ChatGPT">
-      {!changes.length&&<Empty text="Change receipts will appear here when ChatGPT saves something." />}
+    <Panel title="Saved changes">
+      {!changes.length&&<Empty text="Receipts for ChatGPT saves and intentional resets appear here." />}
       {changes.map(c=><div className="course-row" key={c.id}>
         <div><strong>{c.summary}</strong><small>{fmt(c.created_at)} · {c.status==='applied'?'Saved':c.status}</small>{c.chat_url&&<a href={c.chat_url} target="_blank" rel="noreferrer">Open source chat ↗</a>}</div>
         {c.status==='applied'&&<button disabled={busy} onClick={()=>action('/assistant/undo/'+c.id,'That change has been undone.')}>Undo</button>}

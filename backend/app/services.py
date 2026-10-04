@@ -160,7 +160,7 @@ def dashboard(conn, at=None):
     tasks = [
         r
         for r in rows(conn, "tasks")
-        if r["status"] != "done" and r["due_at"] and local(r["due_at"]) <= today
+        if r["status"] != "done" and not r.get("archived") and (not r.get("focus_after") or r["focus_after"] <= today) and r["due_at"] and local(r["due_at"]) <= today
     ]
     start = datetime.combine(today, datetime.min.time(), tzinfo=tz)
     end = start + timedelta(days=1)

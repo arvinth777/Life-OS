@@ -16,8 +16,8 @@ from .domain import calendar_occurrences
 from .operations import complete_task, review_note
 
 router = APIRouter(prefix='/api/assistant', dependencies=[Depends(owner)])
-WRITE_TABLES = Literal['tasks', 'journal_entries', 'goals', 'calendar_events', 'learning_topics', 'learning_sessions', 'exams', 'concept_notes', 'problem_attempts', 'reflections']
-READ_TABLES = {'tasks','journal_entries','ai_feedback','goals','calendar_events','learning_topics','learning_sessions','exams','concept_notes','problem_attempts','reflections','courses','terms','patterns','lessons','problems'}
+WRITE_TABLES = Literal['tasks', 'journal_entries', 'goals', 'calendar_events', 'learning_topics', 'learning_sessions', 'exams', 'concept_notes', 'problem_attempts', 'reflections', 'experiments', 'experiment_checkins']
+READ_TABLES = {'tasks','journal_entries','ai_feedback','goals','calendar_events','learning_topics','learning_sessions','exams','concept_notes','problem_attempts','reflections','courses','terms','patterns','lessons','problems','experiments','experiment_checkins'}
 
 class Operation(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -30,6 +30,7 @@ class Operation(BaseModel):
     data: dict = Field(default_factory=dict)
 
 class Batch(BaseModel):
+    source: Literal['ChatGPT', 'Life OS'] = 'ChatGPT'
     model_config = ConfigDict(extra='forbid')
     request_key: str = Field(min_length=8, max_length=150)
     summary: str = Field(min_length=1, max_length=250)
@@ -195,7 +196,7 @@ def apply_batch(batch: Batch, preview=False):
                 tx.rollback()
                 return {'preview':True,'summary':batch.summary,'changes':changes,'receipts':receipts}
             expire_undo(conn)
-            ident=conn.execute(sa.insert(s.assistant_batches).values(request_key=batch.request_key,request_hash=fingerprint,summary=batch.summary,chat_url=batch.chat_url,changes=changes,undo_until=s.now()+timedelta(days=30)).returning(s.assistant_batches.c.id)).scalar_one()
+            ident=conn.execute(sa.insert(s.assistant_batches).values(request_key=batch.request_key,request_hash=fingerprint,summary=batch.summary,source=batch.source,chat_url=batch.chat_url,changes=changes,undo_until=s.now()+timedelta(days=30)).returning(s.assistant_batches.c.id)).scalar_one()
             tx.commit()
             return {'batch_id':str(ident),'status':'applied','summary':batch.summary,'receipts':receipts}
         except Exception:
@@ -214,7 +215,12 @@ def undo_batch(ident):
         for change in reversed(batch['changes']):
             name=change['table']; t=s.TABLES[name]; row_id=uuid.UUID(change['id'])
             current=record(conn,name,row_id,True)
-            if clean(current)!=change['after']: raise ValueError('A record changed after this batch; undo would overwrite a later edit')
+            expected = dict(change['after']) if change['after'] else None
+            if name == 'tasks' and expected is not None:
+                # Receipts created before migration 0005 predate these defaults.
+                expected.setdefault('archived', False)
+                expected.setdefault('focus_after', None)
+            if clean(current)!=expected: raise ValueError('A record changed after this batch; undo would overwrite a later edit')
             if change['before'] is None:
                 # Never cascade-delete data created by a later operation outside this batch.
                 for child in s.metadata.tables.values():
@@ -252,7 +258,7 @@ def morning_context():
         at=s.now(); today=at.astimezone(tz).date()
         start=datetime.combine(today,time.min,tzinfo=tz); end=start+timedelta(days=1); yesterday=start-timedelta(days=1)
         def fetch(q): return [dict(r) for r in conn.execute(q).mappings()]
-        tasks=fetch(sa.select(s.tasks).where(s.tasks.c.status!='done').order_by(s.tasks.c.due_at.asc().nullslast(),s.tasks.c.priority.desc()).limit(40))
+        tasks=fetch(sa.select(s.tasks).where(s.tasks.c.status!='done', s.tasks.c.archived.is_(False), sa.or_(s.tasks.c.focus_after.is_(None), s.tasks.c.focus_after <= today)).order_by(s.tasks.c.due_at.asc().nullslast(),s.tasks.c.priority.desc()).limit(40))
         assignments=fetch(sa.select(s.assignments).where(s.assignments.c.status!='done',s.assignments.c.due_at<end+timedelta(days=7)).order_by(s.assignments.c.due_at).limit(30))
         event_rows=fetch(sa.select(s.calendar_events).where(s.calendar_events.c.deleted_at.is_(None),s.calendar_events.c.starts_at<end,sa.or_(s.calendar_events.c.ends_at>start,s.calendar_events.c.recurrence!=[],s.calendar_events.c.master_id.is_not(None))).limit(501))
         events=calendar_occurrences(event_rows[:500],start,end)
@@ -288,7 +294,7 @@ def weekly_context():
             .group_by(h.c.metric, h.c.unit, h.c.source)
         ).mappings()]
         upcoming_tasks = [dict(r) for r in conn.execute(
-            sa.select(s.tasks).where(s.tasks.c.status != 'done', s.tasks.c.due_at >= end, s.tasks.c.due_at < next_end)
+            sa.select(s.tasks).where(s.tasks.c.status != 'done', s.tasks.c.archived.is_(False), s.tasks.c.due_at >= end, s.tasks.c.due_at < next_end)
             .order_by(s.tasks.c.due_at).limit(30)
         ).mappings()]
         upcoming_assignments = [dict(r) for r in conn.execute(

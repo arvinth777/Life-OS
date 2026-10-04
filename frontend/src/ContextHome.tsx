@@ -5,6 +5,7 @@ import {Editor, LoadingRows, Modal, Panel} from './components';
 import {CompleteTask, savedFeedback} from './feedback';
 import {ActivityGrid} from './ActivityGrid';
 import {energyNames, LifeMode, localDay, modeNames, modes, recordMode, taskEnergy} from './contexts';
+import {ResetButton} from './Reset';
 import {rankTasks} from './Overview';
 
 export function TaskPlacement({task,onRefresh}:any){
@@ -87,6 +88,8 @@ export function ContextHome(p:any){
       </Panel>
       {mode==='personal'&&<Panel title="Latest sleep record" className="context-recovery">{status('health')||<>{lastSleep?<><strong className="context-reading">{Number(lastSleep.value).toLocaleString(undefined,{maximumFractionDigits:1})} <small>{lastSleep.unit}</small></strong><p className="muted">{fmt(lastSleep.recorded_at)} · {now.getTime()-new Date(lastSleep.recorded_at).getTime()>86400000?'Older than 24 hours':'Latest saved sample'}</p></>:<p className="muted">No sleep reading saved. You can always enter one by hand.</p>}<button className="text-button" onClick={()=>p.navigate('physical')}>Physical goals</button></>}</Panel>}
     </div>
+    <div className="context-reset"><div><strong>Coming back after a break?</strong><p className="muted">Choose what still matters, one task at a time.</p></div><ResetButton mode={mode} onRefresh={p.onRefresh}/></div>
+    {mode==='personal'&&<button className="context-experiment-link" onClick={()=>p.navigate('personality','experiments')}>Personal experiments · try a small change</button>}
     {edit&&<Editor {...p} table={edit.table} row={edit.row} onSaved={p.onRefresh} onClose={()=>setEdit(undefined)}/>}
     {review&&<Modal title="Reflect on your week" onClose={()=>setReview(false)}><p>Use your existing Life OS connection in ChatGPT. Nothing is sent when you open this panel.</p><blockquote className="review-prompt">Use Life OS to review my last seven days: what went well, what felt difficult, and up to three small adjustments. Use saved records, label missing data, and ask before saving any changes.</blockquote><div className="actions"><button onClick={async()=>{try{await navigator.clipboard.writeText('Use Life OS to review my last seven days: what went well, what felt difficult, and up to three small adjustments. Use saved records, label missing data, and ask before saving any changes.');savedFeedback('Review prompt copied')}catch{setCopyError('Select and copy the prompt above.')}}}>Copy prompt</button><a className="button" href="https://chatgpt.com/g/g-p-6aa79a647e048191bb4ba6add6340a6c/project" target="_blank" rel="noreferrer">Open Life OS in ChatGPT</a></div>{copyError&&<p role="status">{copyError}</p>}</Modal>}
   </div>;

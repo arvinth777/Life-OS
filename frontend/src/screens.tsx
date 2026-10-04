@@ -1,3 +1,6 @@
+import {Experiments} from './Experiments';
+import {ResetButton, RestoreTask, taskReady} from './Reset';
+import {todayDate} from './api';
 import { recordMode, taskDefaults, modeNames, taskEnergy } from "./contexts";
 import { EnergyFilter, TaskPlacement } from "./ContextHome";
 import { ActivityGrid } from "./ActivityGrid";
@@ -185,7 +188,8 @@ export function Journal(p: any) {
   );
 }
 export function Personality(p: any) {
-  const [tab, setTab] = useState("reflect");
+  const [tab, setTab] = useState(p.initialTab || "reflect");
+  useEffect(()=>{if(p.initialTab)setTab(p.initialTab)},[p.initialTab]);
   const [traits, setTraits] = useState<any[]>([]);
   const [ratings, setRatings] = useState<any[]>([]);
   const [prompts, setPrompts] = useState<any[]>([]);
@@ -200,6 +204,7 @@ export function Personality(p: any) {
       ),
     )
       .then(([a, b, c, d]) => {
+        setError("");
         setTraits(a);
         setRatings(b);
         setPrompts(c);
@@ -215,13 +220,14 @@ export function Personality(p: any) {
         active={tab}
         onChange={setTab}
         items={[
+          ["experiments", "Experiments"],
           ["reflect", "Reflection"],
           ["ratings", "Trait ratings"],
           ["traits", "Your traits"],
           ["prompts", "Prompt schedule"],
         ]}
       />
-      {tab === "reflect" ? (
+      {tab === "experiments" ? <Experiments {...p}/> : tab === "reflect" ? (
         <>
           <div className="prompt-grid">
             {prompts
@@ -430,7 +436,7 @@ export function Work(p: any) {
           ["goals", "reflections"].includes(tab)
             ? (r: any) => r.domain === "career"
             : tab === "tasks"
-              ? (r: any) => recordMode(r) === "work"
+              ? (r: any) => recordMode(r) === "work" && !r.archived
               : undefined
         }
         initial={
@@ -459,12 +465,14 @@ export function Tasks(p: any) {
         onChange={setTab}
         items={[
           ["open", "Open tasks"],
+          ["later", "Later"],
+          ["archived", "Archived"],
           ["done", "Completed"],
           ["recurring", "Recurring"],
           ["custom", "Custom fields"],
         ]}
       />
-      <div className="task-context-tools"><EnergyFilter value={energy} onChange={setEnergy}/><label><input type="checkbox" checked={all} onChange={e=>setAll(e.target.checked)}/> Show every context</label></div>
+      <div className="task-context-tools"><ResetButton mode={p.mode || "personal"} onRefresh={p.onRefresh}/><EnergyFilter value={energy} onChange={setEnergy}/><label><input type="checkbox" checked={all} onChange={e=>setAll(e.target.checked)}/> Show every context</label></div>
       <p className="muted">{all ? "Every context" : modeNames[p.mode || "personal"]} · Tasks without a context or project start in Personal. Use the context selector to move them.</p>
       {tab === "custom" ? (
         <Records {...p} table="custom_field_definitions" />
@@ -475,13 +483,13 @@ export function Tasks(p: any) {
           columns={["title", "due_at", "priority", "parent_id", "rrule"]}
           initial={taskDefaults(p.mode || "personal")}
           filter={(r: any) =>
-            (all || recordMode(r) === (p.mode || "personal")) && (!energy || taskEnergy(r) === energy) && (tab === "recurring"
-              ? !!r.rrule && r.status !== "done"
+            (all || recordMode(r) === (p.mode || "personal")) && (!energy || taskEnergy(r) === energy) && (tab === "archived" ? r.archived : tab === "later" ? !r.archived && r.status!=="done" && r.focus_after>todayDate() : tab === "recurring"
+              ? !!r.rrule && taskReady(r,todayDate())
               : tab === "done"
                 ? r.status === "done"
-                : r.status !== "done")
+                : taskReady(r,todayDate()))
           }
-          actions={(r: any) => <div><TaskPlacement task={r} onRefresh={p.onRefresh}/>{r.status !== "done" && <CompleteTask task={r} onRefresh={p.onRefresh}/>}</div>}
+          actions={(r: any) => <div>{r.focus_after&&!r.archived&&<small>Revisit {r.focus_after}</small>}<TaskPlacement task={r} onRefresh={p.onRefresh}/>{r.archived || r.focus_after>todayDate() ? <RestoreTask task={r} onRefresh={p.onRefresh}/> : r.status !== "done" && <CompleteTask task={r} onRefresh={p.onRefresh}/>}</div>}
 
         />
       )}

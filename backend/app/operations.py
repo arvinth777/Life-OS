@@ -19,12 +19,14 @@ def complete_task(conn, ident):
     )
     if not task:
         raise HTTPException(404, "Task not found")
+    if task["archived"]:
+        raise ValueError("Restore this task before completing it.")
     if task["status"] == "done":
         return {"ok": True, "next": None}
     unfinished = conn.execute(
         sa.select(sa.func.count())
         .select_from(s.tasks)
-        .where(s.tasks.c.parent_id == ident, s.tasks.c.status != "done")
+        .where(s.tasks.c.parent_id == ident, s.tasks.c.status != "done", s.tasks.c.archived.is_(False))
     ).scalar()
     if unfinished:
         raise ValueError("Complete the subtasks first")
@@ -51,7 +53,7 @@ def complete_task(conn, ident):
             # A completed parent's historical subtasks must not acquire future children.
             # A recurring subtask's next instance is independent and can be re-parented.
             data.update(
-                status="open", due_at=nxt, previous_id=ident, parent_id=None
+                status="open", due_at=nxt, previous_id=ident, parent_id=None, archived=False, focus_after=None
             )
             next_id = conn.execute(
                 pg_insert(s.tasks)

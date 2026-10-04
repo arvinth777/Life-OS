@@ -468,6 +468,26 @@ def validate(conn, name, payload, existing=None):
                 parent = conn.execute(
                     sa.select(s.tasks.c.parent_id).where(s.tasks.c.id == parent)
                 ).scalar_one_or_none()
+    if name == "experiments":
+        if not merged.get("action", "").strip():
+            raise ValueError("Describe the small change you want to try.")
+        if merged.get("ends_on") and merged.get("starts_on") and merged["ends_on"] < merged["starts_on"]:
+            raise ValueError("End date must follow the start date.")
+        if merged.get("status", "active") != "active" and not merged.get("conclusion", "").strip():
+            raise ValueError("Save what you learned before finishing the experiment.")
+        if existing:
+            outside = conn.execute(sa.select(s.experiment_checkins.c.id).where(
+                s.experiment_checkins.c.experiment_id == existing["id"],
+                sa.or_(s.experiment_checkins.c.on_date < merged["starts_on"], s.experiment_checkins.c.on_date > merged["ends_on"])
+            )).first()
+            if outside: raise ValueError("The new dates would exclude saved check-ins.")
+    if name == "experiment_checkins":
+        experiment = conn.execute(sa.select(s.experiments).where(s.experiments.c.id == merged.get("experiment_id"))).mappings().first()
+        if not experiment: raise ValueError("Experiment not found.")
+        day = merged.get("on_date")
+        today = s.now().astimezone(ZoneInfo(config(conn).get("timezone", "UTC"))).date()
+        if not day or not experiment["starts_on"] <= day <= min(today, experiment["ends_on"]):
+            raise ValueError("Choose a day within the experiment, no later than today.")
     if name == "workouts":
         start, end = merged.get("started_at"), merged.get("ended_at")
         if end and (not start or end < start):
@@ -627,7 +647,7 @@ def agenda(start: datetime, end: datetime):
             result.extend(
                 {**r, "kind": name, "starts_at": r["due_at"]}
                 for r in rows(conn, name)
-                if r["due_at"] and start <= r["due_at"] < end and r["status"] != "done"
+                if r["due_at"] and start <= r["due_at"] < end and r["status"] != "done" and not r.get("archived", False)
             )
         return sorted(result, key=lambda r: r["starts_at"])
 

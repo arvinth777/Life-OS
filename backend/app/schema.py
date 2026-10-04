@@ -220,6 +220,8 @@ tasks = table(
     text("notes"),
     time("due_at", True),
     integer("priority", 2),
+    boolean("archived"),
+    date("focus_after", True),
     text("status", "open"),
     fk("parent_id", "tasks", True),
     fk("project_id", "projects", True),
@@ -443,6 +445,20 @@ learning_sessions = table(
 exams = table(
     "exams", fk("event_id", "calendar_events", unique=True),
     fk("course_id", "courses"), text("import_key", unique=True), text("notes"),
+)
+
+experiments = table(
+    "experiments", text("title"), text("hypothesis"), text("action"),
+    date("starts_on"), date("ends_on"), text("status", "active"),
+    text("conclusion"),
+    check("ends_on >= starts_on"),
+    check("status IN ('active', 'keep', 'change', 'stop')"),
+)
+experiment_checkins = table(
+    "experiment_checkins", fk("experiment_id", "experiments", delete="CASCADE"),
+    date("on_date"), boolean("tried"), col("feeling", sa.Integer, nullable=True),
+    text("note"), unique("experiment_id", "on_date"),
+    check("feeling IS NULL OR feeling BETWEEN 1 AND 5"),
 )
 
 SYSTEM = {
