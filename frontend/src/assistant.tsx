@@ -8,7 +8,7 @@ export function LearningLog(p: any) {
       <p>Learn in ChatGPT, in class or on your own. Keep the useful milestones and your next step here.</p>
       <p className="muted">Studied means you explored it. Practised means you tried it. Demonstrated means you showed understanding. Time is optional.</p>
     </Panel>
-    <Records {...p} table="learning_topics" heading="Topics & next steps" columns={['title','course_id','status','next_step']} />
+    <Records {...p} table="learning_topics" heading="Topics & next steps" columns={['title','course_id','pattern_id','status','next_step']} />
     <Records {...p} table="learning_sessions" heading="Learning log" columns={['topic_id','studied_at','kind','summary','minutes']} />
   </>;
 }

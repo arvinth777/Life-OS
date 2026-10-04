@@ -1,3 +1,4 @@
+import { ActivityGrid } from "./ActivityGrid";
 import { AssistantSettings, LearningLog } from "./assistant";
 import React, { useEffect, useState } from "react";
 import {
@@ -339,6 +340,7 @@ export function Academic(p: any) {
       />
       {tab === "overview" ? (
         <>
+          <ActivityGrid kind="academics" refresh={p.refresh} />
           <div className="summary-grid">
             {data.terms.map((t: any) => (
               <Panel key={t.id} title={t.name}>

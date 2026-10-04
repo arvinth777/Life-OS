@@ -540,7 +540,7 @@ def test_large_chunked_backup_restore_and_legacy_compatibility(client):
     with engine.connect() as conn:
         assert (
             conn.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "0003"
+            == "0004"
         )
 
 
@@ -1491,3 +1491,77 @@ def test_exam_timetable_weekly_review_connection_health_and_schedule(client):
     assert 'Personal workspace' in anonymous.get('/').text
     assert 'does not sell data' in anonymous.get('/privacy').text
     assert 'provided as-is' in anonymous.get('/terms').text
+
+
+def test_training_timer_records_and_activity(client):
+    from app.services import setting
+    with engine.begin() as conn:
+        setting(conn, 'timezone', 'Asia/Kolkata')
+    start = client.post('/api/physical/sessions/start', json={'title': 'Upper body'}).json()
+    again = client.post('/api/physical/sessions/start', json={'title': 'Retry'}).json()
+    assert start['id'] == again['id']
+    assert client.get('/api/data/workouts').json()[0]['started_at'] == start['started_at']
+    finish = client.post('/api/physical/sessions/'+start['id']+'/finish').json()
+    assert finish['ended_at']
+    assert client.post('/api/physical/sessions/'+start['id']+'/finish').json()['ended_at'] == finish['ended_at']
+    assert client.patch('/api/data/workouts/'+start['id'], json={'ended_at':'1900-01-01T00:00:00Z'}).status_code == 422
+    client.delete('/api/data/workouts/'+start['id'])
+    exercise = client.get('/api/data/exercises').json()[0]
+    w1 = create(client, 'workouts', title='First', performed_at='2020-01-01T20:00:00Z', started_at='2020-01-01T20:00:00Z', ended_at='2020-01-01T20:45:00Z')
+    w2 = create(client, 'workouts', title='Second', performed_at='2020-01-03T10:00:00Z')
+    w3 = create(client, 'workouts', title='Future', performed_at='2199-01-01T10:00:00Z')
+    sets = []
+    for w,reps,weight in [(w1,5,40),(w1,5,40),(w2,8,40),(w2,3,50),(w3,10,100)]:
+        sets.append(create(client, 'workout_sets', workout_id=w['id'], exercise_id=exercise['id'], reps=reps, weight_kg=weight))
+    records = client.get('/api/physical/records').json()[0]
+    assert records['heaviest']['weight_kg'] == 50
+    assert len(records['history']) == 3
+    assert records['rep_bests'][1]['reps'] == 8
+    client.delete('/api/data/workout_sets/'+sets[3]['id'])
+    assert client.get('/api/physical/records').json()[0]['heaviest']['weight_kg'] == 40
+    client.patch('/api/data/workout_sets/'+sets[2]['id'], json={'reps':4})
+    assert client.get('/api/physical/records').json()[0]['rep_bests'][0]['reps'] == 5
+    grid = client.get('/api/activity/physical?year=2020').json()
+    assert grid['active_days'] == 2 and grid['total'] == 2
+    assert grid['days']['2020-01-02']['minutes'] == 45
+    assert '2020-01-01' not in grid['days']
+    assert '2020-01-04' not in grid['days']
+    with engine.begin() as conn:
+        setting(conn, 'timezone', 'America/New_York')
+    assert '2020-01-01' in client.get('/api/activity/physical?year=2020').json()['days']
+    with engine.begin() as conn:
+        backup = export_data(conn)
+    assert backup['schema'] == '0004'
+    with engine.begin() as conn:
+        restore(conn, parse_backup(archive(backup)), replace=True)
+    import copy
+    old = copy.deepcopy(backup)
+    old['schema'] = '0003'
+    old['tables']['alembic_version'] = [{'version_num':'0003'}]
+    for row in old['tables']['workouts']:
+        row.pop('started_at'); row.pop('ended_at')
+    with engine.begin() as conn:
+        restore(conn, old, replace=True)
+        assert conn.execute(sa.select(s.workouts.c.started_at).where(s.workouts.c.id == uuid.UUID(w1['id']))).scalar_one() is None
+
+
+def test_study_activity_scope_and_review_days(client):
+    term = create(client,'terms',name='Test term',starts_on='2020-01-01',ends_on='2020-06-01')
+    course = create(client,'courses',name='Mathematics',term_id=term['id'])
+    pattern = client.get('/api/data/patterns').json()[0]
+    academic = create(client,'learning_topics',title='Calculus',course_id=course['id'])
+    dsa = create(client,'learning_topics',title='Practice',pattern_id=pattern['id'])
+    unlinked = create(client,'learning_topics',title='Other')
+    for topic in [academic,dsa,unlinked]:
+        create(client,'learning_sessions',topic_id=topic['id'],studied_at='2020-02-29T12:00:00Z',minutes=25)
+    problem = client.get('/api/data/problems').json()[0]
+    create(client,'problem_attempts',problem_id=problem['id'],attempted_at='2020-02-29T13:00:00Z',minutes=10)
+    note = create(client,'concept_notes',title='Recall',front='Why?',back='Because')
+    with engine.begin() as conn:
+        conn.execute(sa.insert(s.reviews).values(note_id=uuid.UUID(note['id']),grade=4,reviewed_at=datetime(2020,3,1,12,tzinfo=timezone.utc)))
+    a = client.get('/api/activity/academics?year=2020').json()
+    d = client.get('/api/activity/dsa?year=2020').json()
+    assert a['total'] == 1 and a['days']['2020-02-29']['minutes'] == 25
+    assert d['total'] == 3 and d['active_days'] == 2
+    assert d['days']['2020-02-29']['minutes'] == 35
+    assert client.get('/api/activity/dsa?year=2201').status_code == 422

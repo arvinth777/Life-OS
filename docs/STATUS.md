@@ -1,5 +1,14 @@
 # Delivery status
 
+## Workout and activity upgrade — 4 October 2026
+
+- Physical → Workouts now includes saved start/finish timing, reload continuity, editable past times, and session-scoped set entry/edit/delete. Elapsed time includes rests; old workouts have unknown duration until explicitly entered.
+- Physical → Personal records derives heaviest load and best reps at each weight, with dated improvement history. Changes to historical sets recalculate records. Unweighted sets have rep records; future-dated sessions are excluded.
+- Yearly activity grids appear in Physical → Workouts, Academics → Overview, and DSA → Your progress. Days open saved details; arrow keys navigate. Empty means nothing logged. Course-linked study feeds Academics; pattern-linked study, attempts, and reviews feed DSA. Counts use the configured timezone; elapsed workout duration belongs to the session start date.
+- Migration 0004 adds nullable workout start/end times and permits one running timer. It was rehearsed on a temporary Neon branch before production; existing workout rows were preserved. CSV/JSON export includes timing; 0001–0003 backups upgrade on restore without inventing duration.
+- Validation: 44 backend acceptance tests; browser start → reload → set → finish → PR flow; three activity grids and mobile overflow; all 46 module/tab surfaces, login continuity, and automated accessibility on primary module surfaces.
+
+
 22 September 2026. This document separates running features from scaffolding. No integration is represented as live merely because a configuration field exists.
 
 ## Personal release verification — 22 September 2026

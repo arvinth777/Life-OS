@@ -335,8 +335,13 @@ exercise_muscles = table(
     check("contribution > 0 AND contribution <= 1"),
 )
 workouts = table(
-    "workouts", text("title"), time("performed_at", default=now), text("notes")
+    "workouts", text("title"), time("performed_at", default=now), text("notes"),
+    time("started_at", True), time("ended_at", True),
+    check("ended_at IS NULL OR (started_at IS NOT NULL AND ended_at >= started_at)"),
 )
+sa.Index("one_active_workout", sa.literal_column("(true)"), unique=True,
+         postgresql_where=sa.and_(workouts.c.started_at.isnot(None), workouts.c.ended_at.is_(None)),
+         _table=workouts)
 workout_sets = table(
     "workout_sets",
     fk("workout_id", "workouts", delete="CASCADE"),

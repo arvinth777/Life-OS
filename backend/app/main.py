@@ -73,6 +73,8 @@ def privacy_page():
 def terms_page():
     return public_page('Terms of use', "<p>Life OS is a personal application provided for its owner's own use. It is provided as-is, without availability guarantees. The owner is responsible for reviewing synchronized events, maintaining backups, and protecting account credentials.</p><p>Google Calendar access is limited to the calendar selected by the owner and can be revoked at any time.</p><p>Contact: arvinth273@gmail.com</p>")
 
+from .tracking import router as tracking_router
+app.include_router(tracking_router)
 app.include_router(transfer_router)
 app.include_router(samsung_router)
 app.include_router(google_router)
@@ -466,6 +468,16 @@ def validate(conn, name, payload, existing=None):
                 parent = conn.execute(
                     sa.select(s.tasks.c.parent_id).where(s.tasks.c.id == parent)
                 ).scalar_one_or_none()
+    if name == "workouts":
+        start, end = merged.get("started_at"), merged.get("ended_at")
+        if end and (not start or end < start):
+            raise ValueError("End time must be at or after the start time.")
+        if start and not end:
+            query = sa.select(s.workouts.c.id).where(s.workouts.c.started_at.isnot(None), s.workouts.c.ended_at.is_(None))
+            if existing:
+                query = query.where(s.workouts.c.id != existing["id"])
+            if conn.execute(query).first():
+                raise ValueError("Finish the active workout first, or enter both start and end times for a past workout.")
     if name == "exams" and not merged.get("import_key"):
         data["import_key"] = str(uuid.uuid4())
     if name == "calendar_events":

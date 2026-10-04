@@ -1,3 +1,4 @@
+import { ActivityGrid } from "./ActivityGrid";
 import { LearningLog } from "./assistant";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -205,6 +206,7 @@ export function DSA(p: any) {
         </>
       ) : tab === "progress" ? (
         <>
+          <ActivityGrid kind="dsa" refresh={p.refresh} />
           <LearningLog {...p} />
           <Panel title="Time to solve">
             <Trend

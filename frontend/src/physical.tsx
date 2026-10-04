@@ -12,6 +12,7 @@ import {
 } from "./components";
 import { WaterTracker } from "./WaterTracker";
 import { ValueBar } from "./feedback";
+import { WorkoutLog, PersonalRecords } from "./WorkoutLog";
 export function Physical(p: any) {
   const [tab, setTab] = useState("overview");
   const [data, setData] = useState<any>();
@@ -57,6 +58,7 @@ export function Physical(p: any) {
           ["overview", "Today & training"],
           ["watch", "Watch data"],
           ["workouts", "Workouts"],
+          ["records", "Personal records"],
           ["sets", "Sets"],
           ["health", "Health records"],
           ["library", "Exercise library"],
@@ -103,8 +105,8 @@ export function Physical(p: any) {
           </div>
           <div className="training-heading">
             <h2>Training</h2>
-            <button className="primary" onClick={() => setEdit({ table: "workouts" })}>
-              <Plus size={16} />Log workout
+            <button className="primary" onClick={() => setTab("workouts")}>
+              <Plus size={16} />Open workouts
             </button>
           </div>
           <div className="physical-layout">
@@ -205,6 +207,10 @@ export function Physical(p: any) {
               </div>
             ))}
         </>
+      ) : tab === "workouts" ? (
+        <WorkoutLog {...p} />
+      ) : tab === "records" ? (
+        <PersonalRecords refresh={p.refresh} />
       ) : tab === "watch" ? (
         <WatchReadings refresh={p.refresh} />
       ) : tab === "health" ? (

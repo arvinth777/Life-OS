@@ -155,8 +155,9 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
       .getByRole("button", { name: "Physical goals", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Log workout", exact: true })
+      .getByRole("button", { name: "Open workouts", exact: true })
       .click();
+    await page.getByRole("button", { name: "Log past workout", exact: true }).click();
     await page
       .getByRole("dialog")
       .getByLabel(/^Title/)
@@ -168,11 +169,8 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
     await expect(page.getByRole("dialog")).toHaveCount(0);
     const workout = await remember("workouts", "title", "QA session " + suffix);
     await page.getByRole("button", { name: "Workouts", exact: true }).click();
-    await page
-      .getByRole("row")
-      .filter({ hasText: "QA session " + suffix })
-      .getByRole("button", { name: "Set", exact: true })
-      .click();
+    await page.locator('.session-list button').filter({hasText:'QA session '+suffix}).click();
+    await page.getByRole('button',{name:'Add set',exact:true}).click();
     await page
       .getByRole("dialog")
       .getByLabel("Exercise")

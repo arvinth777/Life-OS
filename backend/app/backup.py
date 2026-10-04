@@ -57,7 +57,7 @@ def export_data(conn, set_isolation=True):
             ).scalar_one()
         }
     ]
-    return {"format": "life-os-backup", "version": 1, "schema": "0003", "tables": data}
+    return {"format": "life-os-backup", "version": 1, "schema": "0004", "tables": data}
 
 
 def archive(data):
@@ -119,10 +119,20 @@ def restore(conn, data, replace=False):
             data["tables"][name] = []
         data["schema"] = "0003"
         data["tables"]["alembic_version"] = [{"version_num": "0003"}]
+    if isinstance(data, dict) and data.get("schema") == "0003":
+        import copy
+        data = copy.deepcopy(data)
+        if data.get("tables", {}).get("alembic_version") != [{"version_num": "0003"}]:
+            raise ValueError("Migration revision does not match")
+        for row in data.get("tables", {}).get("workouts", []):
+            row.setdefault("started_at", None)
+            row.setdefault("ended_at", None)
+        data["schema"] = "0004"
+        data["tables"]["alembic_version"] = [{"version_num": "0004"}]
     if (
         not isinstance(data, dict)
         or data.get("format") != "life-os-backup"
-        or data.get("schema") != "0003"
+        or data.get("schema") != "0004"
         or data.get("version") != 1
     ):
         raise ValueError("Unsupported backup format or schema version")
@@ -130,7 +140,7 @@ def restore(conn, data, replace=False):
         raise ValueError("Backup tables are missing")
     if set(data["tables"]) != {*TABLES, "alembic_version"}:
         raise ValueError("Backup must include every table")
-    if data["tables"]["alembic_version"] != [{"version_num": "0003"}]:
+    if data["tables"]["alembic_version"] != [{"version_num": "0004"}]:
         raise ValueError("Migration revision does not match")
     for t in metadata.sorted_tables:
         if not isinstance(data["tables"][t.name], list):
