@@ -197,3 +197,7 @@ In Physical → Workouts, name a session and choose **Start workout**. Add sets 
 The yearly square grids are in Physical → Workouts, Academics → Overview, and DSA → Your progress. Select a day to inspect its saved activity; use arrow keys when a square is focused. The calendar scrolls horizontally on smaller screens. Empty squares mean no activity was logged, including rest days. Academics counts learning sessions whose topic links to a course. DSA counts attempts, reviews, and learning sessions whose topic links to a pattern. A topic linked to both appears in both grids. Unlinked general study stays in the learning log without being assigned to either domain. Minutes sum only explicitly timed records. Future timestamps do not count.
 
 Apply `alembic upgrade head` before deploying this version: revision `0004` adds nullable workout timing. No service or paid dependency is added. Earlier `0001`–`0003` JSON and CSV backups remain restorable.
+
+### Context workspaces
+
+Use the Work / Academics / Personal switch to change the landing view, theme, and visible modules. Quick add previews a sentence before saving; tasks can be reassigned and filtered by Focus / Light / Quick energy. All agenda remains shared so you can check commitments across modes. Unclassified tasks and journal entries begin in Personal; project-linked tasks begin in Work. No deadlines are automatically rescheduled. See [Context mode guide](docs/CONTEXT_MODES.md) for capture syntax, tagging, drafts, and the opt-in weekly review.

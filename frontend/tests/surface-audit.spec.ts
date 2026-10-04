@@ -8,7 +8,7 @@ test('every module tab loads, editors open, scrollbar and keyboard behavior rema
  await page.goto('/');
  await page.getByLabel('Password',{exact:true}).fill(password!);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Start here'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Next up'})).toBeVisible();
  const visited:string[]=[];
  for(const route of ['home','journal','personality','academics','work','dsa','physical','calendar','tasks','settings']) {
   await page.goto('/#'+route);
@@ -51,12 +51,12 @@ test('login continuity survives reload and a second tab; sign-out revokes its to
  await page.goto('/');
  await page.getByLabel('Password',{exact:true}).fill(password!);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Start here'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Next up'})).toBeVisible();
  const token=await page.evaluate(()=>localStorage.getItem('life-os-token'));
  expect(token).toBeTruthy();
- await page.reload();await expect(page.getByRole('heading',{name:'Start here'})).toBeVisible();
+ await page.reload();await expect(page.getByRole('heading',{name:'Next up'})).toBeVisible();
  const other=await context.newPage();await other.goto('/');
- await expect(other.getByRole('heading',{name:'Start here'})).toBeVisible();
+ await expect(other.getByRole('heading',{name:'Next up'})).toBeVisible();
  await other.getByRole('button',{name:'Sign out',exact:true}).click();
  await expect(other.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();
  const result=await page.request.get('/api/auth/me',{headers:{Authorization:'Bearer '+token}});
@@ -70,11 +70,11 @@ test('module surfaces meet automated accessibility checks',async ({page})=>{
  await page.emulateMedia({reducedMotion:'reduce'});
  await page.goto('/');await page.getByLabel('Password',{exact:true}).fill(password!);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Start here'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Next up'})).toBeVisible();
  const issues:any[]=[];
  for(const route of ['home','journal','personality','academics','work','dsa','physical','calendar','tasks','settings']) {
   await page.goto('/#'+route);
-  await expect(page.locator('main h1')).toHaveText(({home:'Overview',journal:'Journal',personality:'Personal growth',academics:'Academics',work:'Work',dsa:'DSA in Python',physical:'Physical goals',calendar:'Calendar',tasks:'To-do list',settings:'Settings'} as any)[route]);
+  await expect(page.locator('main h1')).toHaveText(({home:'Personal',journal:'Journal',personality:'Personal growth',academics:'Academics',work:'Work',dsa:'DSA in Python',physical:'Physical goals',calendar:'All agenda',tasks:'To-do list',settings:'Settings'} as any)[route]);
   await page.waitForLoadState('networkidle');
   await page.addScriptTag({path:process.env.LIFE_OS_AXE_SCRIPT!});
   const result=await page.evaluate(async()=> (await (window as any).axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map((v:any)=>({id:v.id,targets:v.nodes.map((n:any)=>n.target)})));

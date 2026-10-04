@@ -1,0 +1,81 @@
+import {test,expect} from '@playwright/test';
+import {parseCapture,zonedISO,recordMode} from '../src/contexts';
+const password=process.env.LIFE_OS_TEST_PASSWORD;
+test('capture dates use owner timezone, reject clock changes, and preserve context rules',()=>{
+ const now=new Date('2026-10-04T22:00:00Z');
+ const p=parseCapture('Meeting tomorrow at 3pm for work','personal','Asia/Kolkata',now);
+ expect(p).toMatchObject({context:'work',kind:'event',when:'2026-10-06T15:00'});
+ expect(zonedISO(p.when,'Asia/Kolkata')).toBe('2026-10-06T09:30:00.000Z');
+ expect(parseCapture('Review tomorrow','academics','Asia/Kolkata',now).when).toBe('');
+ expect(()=>zonedISO('2026-03-08T02:30','America/New_York')).toThrow();
+ expect(()=>zonedISO('2026-11-01T01:30','America/New_York')).toThrow();
+ expect(recordMode({project_id:'p'})).toBe('work');
+ expect(recordMode({project_id:'p',tags:['context:academics']})).toBe('academics');
+ expect(recordMode({tags:['study']})).toBe('academics');
+});
+test('modes isolate saved records; capture persists; task movement and completion retain deadlines',async({page})=>{
+ test.skip(!password,'Requires disposable local database');
+ test.setTimeout(180000);
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.goto('/');
+ if(new URL(page.url()).hostname!=='127.0.0.1')throw new Error('Local test only');
+ await page.getByLabel('Password',{exact:true}).fill(password!);
+ await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Next up',exact:true})).toBeVisible();
+ const token=await page.evaluate(()=>localStorage.getItem('life-os-token'));
+ const headers={Authorization:'Bearer '+token};
+ const zone=(await(await page.request.get('/api/data/settings',{headers})).json()).find((r:any)=>r.key==='timezone')?.value||'UTC';
+ const created:{table:string,id:string}[]=[];
+ const post=async(table:string,payload:any)=>{const r=await page.request.post('/api/data/'+table,{headers,data:payload});expect(r.ok(),await r.text()).toBeTruthy();const row=await r.json();created.push({table,id:row.id});return row};
+ const suffix=String(Date.now());
+ const work='Prepare work brief '+suffix,study='Review algebra '+suffix,personal='Book a haircut '+suffix;
+ const deadline='2026-09-01T09:00:00Z';
+ const w=await post('tasks',{title:work,due_at:deadline,tags:['context:work','energy:focus','preserve']});
+ await post('tasks',{title:study,tags:['context:academics']});
+ await post('tasks',{title:personal,tags:['context:personal']});
+ const switchMode=async(name:string)=>{await page.getByRole('group',{name:'Workspace mode',exact:true}).getByRole('button',{name,exact:true}).click();await expect(page.locator('main h1')).toHaveText(name)};
+ try {
+  await page.reload();await expect(page.getByText(personal,{exact:true})).toBeVisible();await expect(page.getByText(work,{exact:true})).toHaveCount(0);
+  await switchMode('Work');await expect(page.getByText(work,{exact:true})).toBeVisible();await expect(page.getByText(study,{exact:true})).toHaveCount(0);await expect(page.getByText(personal,{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('navigation').getByRole('button',{name:'Physical goals',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Light',exact:true}).click();await expect(page.getByText(work,{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Focus',exact:true}).click();await expect(page.getByText(work,{exact:true})).toBeVisible();
+  await page.getByLabel('Context for '+work,{exact:true}).selectOption('academics');await expect(page.getByText(work,{exact:true})).toHaveCount(0);
+  const moved=await(await page.request.get('/api/data/tasks',{headers})).json();expect(new Date(moved.find((t:any)=>t.id===w.id).due_at).toISOString()).toBe(new Date(deadline).toISOString());expect(moved.find((t:any)=>t.id===w.id)).toMatchObject({tags:expect.arrayContaining(['context:academics','energy:focus','preserve'])});
+  await switchMode('Academics');await expect(page.getByText(work,{exact:true})).toBeVisible();await expect(page.getByText(study,{exact:true})).toBeVisible();
+  await page.reload();await expect(page.locator('main h1')).toHaveText('Academics');
+  await page.getByRole('button',{name:'Quick add',exact:true}).first().click();
+  const dialog=page.getByRole('dialog');
+  await dialog.getByLabel('What’s on your mind?').fill('Task: Practise vectors '+suffix);
+  await dialog.getByRole('button',{name:'Review capture'}).click();
+  await expect(dialog.getByRole('combobox',{name:'Context',exact:true})).toHaveValue('academics');
+  await dialog.getByRole('combobox',{name:'Energy',exact:true}).selectOption('quick');
+  await dialog.getByRole('button',{name:'Save capture'}).click();await expect(dialog).toHaveCount(0);
+  const task=(await(await page.request.get('/api/data/tasks',{headers})).json()).find((r:any)=>r.title==='Practise vectors '+suffix);expect(task.tags).toContain('energy:quick');created.push({table:'tasks',id:task.id});
+  await page.reload();await expect(page.getByText(task.title,{exact:true})).toBeVisible();
+  const taskRow=page.locator('.context-task').filter({hasText:task.title});await taskRow.getByRole('button',{name:/Complete/}).click();await expect(page.getByText(task.title,{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Quick add',exact:true}).first().click();
+  await dialog.getByLabel('What’s on your mind?').fill('Meeting tomorrow at 3pm for work '+suffix);
+  await dialog.getByRole('button',{name:'Review capture'}).click();await expect(dialog.getByRole('combobox',{name:'Context',exact:true})).toHaveValue('work');await expect(dialog.getByRole('combobox',{name:'Save as',exact:true})).toHaveValue('event');
+  const wall=await dialog.locator('input[type="datetime-local"]').inputValue();await expect(dialog.locator('input[type="datetime-local"]')).not.toHaveValue('');
+  await dialog.getByRole('button',{name:'Save capture'}).click();await expect(dialog).toHaveCount(0);
+  const event=(await(await page.request.get('/api/data/calendar_events',{headers})).json()).find((r:any)=>r.title.includes(suffix));expect(new Date(event.starts_at).toISOString()).toBe(zonedISO(wall,zone));created.push({table:'calendar_events',id:event.id});
+  await switchMode('Work');await expect(page.getByText(event.title,{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Quick add',exact:true}).first().click();await dialog.getByLabel('What’s on your mind?').fill('Idea: make study easier '+suffix);await dialog.getByRole('button',{name:'Keep draft & close'}).click();
+  await switchMode('Academics');await page.getByRole('button',{name:'Quick add',exact:true}).first().click();await expect(dialog.getByLabel('What’s on your mind?')).toHaveValue('Idea: make study easier '+suffix);await dialog.getByRole('button',{name:'Review capture'}).click();await dialog.getByRole('button',{name:'Save capture'}).click();await expect(dialog).toHaveCount(0);
+  const note=(await(await page.request.get('/api/data/journal_entries',{headers})).json()).find((r:any)=>r.title==='make study easier '+suffix);expect(note.tags).toContain('context:academics');created.push({table:'journal_entries',id:note.id});
+  await page.getByRole('button',{name:'Open notes',exact:true}).click();await expect(page.getByText(note.title,{exact:true}).first()).toBeVisible();await expect(page.getByRole('group',{name:'Workspace mode'}).getByRole('button',{name:'Academics'})).toHaveAttribute('aria-pressed','true');
+  for(const name of ['Work','Academics','Personal']){
+    await switchMode(name);await page.waitForLoadState('networkidle');
+    await page.setViewportSize({width:1440,height:1050});await page.screenshot({path:`/tmp/life-os-mode-${name}.png`,fullPage:true,animations:'disabled'});
+    await page.setViewportSize({width:320,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    if(process.env.LIFE_OS_AXE_SCRIPT){await page.addScriptTag({path:process.env.LIFE_OS_AXE_SCRIPT});const violations=await page.evaluate(async()=>(await (window as any).axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map((v:any)=>({id:v.id,nodes:v.nodes.map((n:any)=>n.target)})));expect(violations).toEqual([])}
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:'/tmp/life-os-mode-mobile.png',fullPage:true,animations:'disabled'});
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  const modeSwitch=page.getByRole('group',{name:'Workspace mode'});await modeSwitch.getByRole('button',{name:'Work',exact:true}).focus();await page.keyboard.press('Enter');await expect(page.locator('main h1')).toHaveText('Work');expect(await page.locator('.mode-slider').evaluate(el=>getComputedStyle(el).transitionDuration)).toContain('0.44s');
+  await page.emulateMedia({reducedMotion:'reduce'});expect(await page.locator('.mode-slider').evaluate(el=>getComputedStyle(el).transitionDuration)).not.toContain('0.44s');await switchMode('Personal');
+  await page.getByRole('button',{name:'Open workouts',exact:true}).click();await expect(page.getByRole('button',{name:'Start workout',exact:true})).toBeVisible();
+ } finally {for(const r of created.reverse())await page.request.delete('/api/data/'+r.table+'/'+r.id,{headers})}
+});

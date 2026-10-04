@@ -14,7 +14,7 @@ import { WaterTracker } from "./WaterTracker";
 import { ValueBar } from "./feedback";
 import { WorkoutLog, PersonalRecords } from "./WorkoutLog";
 export function Physical(p: any) {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(p.initialTab || "overview");
   const [data, setData] = useState<any>();
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [selection, setSelection] = useState("week");

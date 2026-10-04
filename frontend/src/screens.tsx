@@ -1,3 +1,5 @@
+import { recordMode, taskDefaults, modeNames, taskEnergy } from "./contexts";
+import { EnergyFilter, TaskPlacement } from "./ContextHome";
 import { ActivityGrid } from "./ActivityGrid";
 import { AssistantSettings, LearningLog } from "./assistant";
 import React, { useEffect, useState } from "react";
@@ -43,14 +45,14 @@ export function Journal(p: any) {
         api("/integrations/status"),
       ])
         .then(([a, b, c]) => {
-          setEntries(a);
+          setEntries(a.filter((entry:any)=>recordMode(entry)===(p.mode||"personal")));
           setFeedback(b);
           setStatus(c);
         })
         .catch((e) => setError(e.message));
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, p.refresh]);
+  }, [query, p.refresh, p.mode]);
   const current = entries.find((e) => e.id === selected) || entries[0];
   return (
     <>
@@ -172,6 +174,7 @@ export function Journal(p: any) {
       {edit !== undefined && (
         <Editor
           table="journal_entries"
+          initial={{tags:[`context:${p.mode || 'personal'}`]}}
           schema={p.schema}
           row={edit}
           onClose={() => setEdit(undefined)}
@@ -427,11 +430,11 @@ export function Work(p: any) {
           ["goals", "reflections"].includes(tab)
             ? (r: any) => r.domain === "career"
             : tab === "tasks"
-              ? (r: any) => !!r.project_id
+              ? (r: any) => recordMode(r) === "work"
               : undefined
         }
         initial={
-          ["goals", "reflections"].includes(tab) ? { domain: "career" } : {}
+          ["goals", "reflections"].includes(tab) ? { domain: "career" } : tab === "tasks" ? taskDefaults("work") : {}
         }
         actions={
           tab === "tasks"
@@ -446,6 +449,8 @@ export function Work(p: any) {
   );
 }
 export function Tasks(p: any) {
+  const [energy, setEnergy] = useState("");
+  const [all, setAll] = useState(false);
   const [tab, setTab] = useState("open");
   return (
     <>
@@ -459,6 +464,8 @@ export function Tasks(p: any) {
           ["custom", "Custom fields"],
         ]}
       />
+      <div className="task-context-tools"><EnergyFilter value={energy} onChange={setEnergy}/><label><input type="checkbox" checked={all} onChange={e=>setAll(e.target.checked)}/> Show every context</label></div>
+      <p className="muted">{all ? "Every context" : modeNames[p.mode || "personal"]} · Tasks without a context or project start in Personal. Use the context selector to move them.</p>
       {tab === "custom" ? (
         <Records {...p} table="custom_field_definitions" />
       ) : (
@@ -466,16 +473,16 @@ export function Tasks(p: any) {
           {...p}
           table="tasks"
           columns={["title", "due_at", "priority", "parent_id", "rrule"]}
+          initial={taskDefaults(p.mode || "personal")}
           filter={(r: any) =>
-            tab === "recurring"
+            (all || recordMode(r) === (p.mode || "personal")) && (!energy || taskEnergy(r) === energy) && (tab === "recurring"
               ? !!r.rrule && r.status !== "done"
               : tab === "done"
                 ? r.status === "done"
-                : r.status !== "done"
+                : r.status !== "done")
           }
-          actions={(r: any) =>
-            r.status !== "done" && <CompleteTask task={r} onRefresh={p.onRefresh} />
-          }
+          actions={(r: any) => <div><TaskPlacement task={r} onRefresh={p.onRefresh}/>{r.status !== "done" && <CompleteTask task={r} onRefresh={p.onRefresh}/>}</div>}
+
         />
       )}
       <p className="muted">

@@ -14,7 +14,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
   await page.getByLabel("Password", { exact: true }).fill(password!);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Overview", exact: true }),
+    page.getByRole("heading", { name: "Personal", exact: true }),
   ).toBeVisible();
   const token = await page.evaluate(() =>
     (localStorage.getItem("life-os-token") || sessionStorage.getItem("life-os-token")),
@@ -37,7 +37,8 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
   }
   const suffix = Date.now();
   try {
-    await page.getByRole("button", { name: "New task", exact: true }).click();
+    await page.getByRole("button", { name: "To-do list", exact: true }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await page
       .getByRole("dialog")
       .getByLabel(/^Title/)
@@ -89,7 +90,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
       .click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await remember("traits", "name", "QA patience " + suffix);
-    await page.getByRole("button", { name: "Academics", exact: true }).click();
+    await page.goto("/#academics");
     await page.getByRole("button", { name: "Terms", exact: true }).click();
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page
@@ -104,7 +105,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
       .click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await remember("terms", "name", "QA term " + suffix);
-    await page.getByRole("button", { name: "Work", exact: true }).click();
+    await page.goto("/#work");
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page
       .getByRole("dialog")
@@ -116,9 +117,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
       .click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await remember("projects", "name", "QA project " + suffix);
-    await page
-      .getByRole("button", { name: "DSA in Python", exact: true })
-      .click();
+    await page.goto("/#dsa");
     await page
       .getByRole("button", { name: "Learning path", exact: true })
       .click();
@@ -151,9 +150,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
     await expect(
       page.getByText(/This lesson is an incomplete outline/),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Physical goals", exact: true })
-      .click();
+    await page.goto("/#physical");
     await page
       .getByRole("button", { name: "Open workouts", exact: true })
       .click();
@@ -191,7 +188,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
     );
     expect(await page.locator(".muscle.active path").first().evaluate((el) => getComputedStyle(el).animationName)).toBe("muscle-light");
     await expect(page.locator(".volume-row .value-bar")).toHaveCount(3);
-    await page.getByRole("button", { name: "Calendar", exact: true }).click();
+    await page.getByRole("button", { name: "All agenda", exact: true }).click();
     await page.getByRole("button", { name: "Event", exact: true }).click();
     await page
       .getByRole("dialog")
@@ -234,7 +231,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
         "settings",
       ]) {
         const endpoints: any = {
-          home: "/dashboard",
+          home: "/data/tasks",
           journal: "/data/journal_entries",
           personality: "/data/reflection_prompts",
           academics: "/academics/summary",
@@ -252,14 +249,14 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
         await page.goto("/#" + route);
         await response;
         const names: any = {
-          home: "Overview",
+          home: "Personal",
           journal: "Journal",
           personality: "Personal growth",
           academics: "Academics",
           work: "Work",
           dsa: "DSA in Python",
           physical: "Physical goals",
-          calendar: "Calendar",
+          calendar: "All agenda",
           tasks: "To-do list",
           settings: "Settings",
         };
@@ -277,7 +274,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
     }
     await page.goto("/#home");
     await expect(
-      page.getByRole("heading", { name: "Start here", exact: true }),
+      page.getByRole("heading", { name: "Next up", exact: true }),
     ).toBeVisible();
     await page.screenshot({
       path: process.env.LIFE_OS_SCREENSHOT || "/tmp/life-os-desktop.png",

@@ -1,3 +1,9 @@
+## Context workspaces — 2026-10-04
+
+Work, Academics, and Personal now have distinct themes, home layouts, filtered navigation, and animated mode switching. Existing task/note tags persist context and energy; deadlines stay unchanged. Quick add previews supported date phrases and saves tasks, notes, journal entries, and calendar events through the existing API. All agenda stays shared. Weekly reflection opens the existing opt-in ChatGPT flow.
+
+Validation: 9 targeted checks across mode behaviour, date conversion, empty/error states, 46 module/tab surfaces, login continuity, accessibility, and owner workflows; local Postgres save/readback, mobile/desktop review, keyboard/reduced-motion checks, and production build. No schema/backend change. External Google/watch sync was not retested in this turn. See [Context modes](CONTEXT_MODES.md) for usage and limits.
+
 # Delivery status
 
 ## Workout and activity upgrade — 4 October 2026
