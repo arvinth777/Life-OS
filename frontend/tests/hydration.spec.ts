@@ -9,7 +9,7 @@ test("hydration saves once, fills from persisted totals, and recovers uncertain 
   await expect(page.getByRole("heading", { name: "Start here", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add 250 ml of water" })).toHaveCount(0);
   await expect(page.getByText("Water today", { exact: true })).toHaveCount(0);
-  const token = await page.evaluate(() => sessionStorage.getItem("life-os-token"));
+  const token = await page.evaluate(() => (localStorage.getItem("life-os-token") || sessionStorage.getItem("life-os-token")));
   const headers = { Authorization: "Bearer " + token };
   const before = (await (await page.request.get("/api/dashboard", { headers })).json()).metrics.water || 0;
   const records: string[] = [];

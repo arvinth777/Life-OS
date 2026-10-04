@@ -7,7 +7,7 @@ test("chunked backup restores through the settings interface", async ({ page }) 
   await page.getByLabel("Username", { exact: true }).fill("owner");
   await page.getByLabel("Password", { exact: true }).fill("test-password-only");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.locator("main h1")).toHaveText("Today");
+  await expect(page.locator("main h1")).toHaveText("Overview");
   await page.goto("/#settings");
   await page.getByRole("button", { name: "Backup & restore", exact: true }).click();
   const downloadEvent = page.waitForEvent("download");

@@ -147,3 +147,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid #9ec8ff; outline-offs
 .health-glance strong { font:21px var(--font-mono); }
 .health-glance strong small { display:inline; font:12px var(--font-body); }
 .health-glance > small { margin-top:7px; font-size:11px; }
+
+/* Match page, dialog, table and navigation scrollbars without hiding them. */
+html { scrollbar-gutter: stable; }
+* { scrollbar-width: thin; scrollbar-color: #536078 #0c101c; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: #0c101c; }
+::-webkit-scrollbar-thumb { background: #536078; border: 3px solid #0c101c; border-radius: 12px; }
+::-webkit-scrollbar-thumb:hover { background: #8492ac; }
+::-webkit-scrollbar-corner { background: #0c101c; }
+@media (pointer: coarse) { * { scrollbar-width: auto; } }
+@media (forced-colors: active) { * { scrollbar-color: auto; scrollbar-width: auto; } }

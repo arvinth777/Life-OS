@@ -17,7 +17,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
     page.getByRole("heading", { name: "Overview", exact: true }),
   ).toBeVisible();
   const token = await page.evaluate(() =>
-    sessionStorage.getItem("life-os-token"),
+    (localStorage.getItem("life-os-token") || sessionStorage.getItem("life-os-token")),
   );
   const created: [string, string][] = [];
   async function cleanup() {
@@ -254,7 +254,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
         await page.goto("/#" + route);
         await response;
         const names: any = {
-          home: "Today",
+          home: "Overview",
           journal: "Journal",
           personality: "Personal growth",
           academics: "Academics",
