@@ -39,3 +39,18 @@ The dashboard gave water and steps first position despite their belonging to phy
 - Inspected the revised Home and Physical goals screens on desktop and mobile, and the filled water tank in dark mode.
 - Local accessibility checks found low contrast in secondary light-mode labels; the muted text token was darkened across the app. Rechecks of Home and Physical goals reported no automated WCAG A/AA violations in either theme.
 - These checks use the local API; no wearable or Google integration was newly enabled or claimed as tested.
+
+## October 4 — midnight workroom and useful Overview
+
+- Palette: adopt the owner's reference with near-black navy surfaces, warm amber actions, blue learning accents and teal connection indicators, independent of OS light/dark preference.
+- Illustration: a small original pixel workroom adds warmth to login and Overview; reading and editing surfaces remain undecorated.
+- Hierarchy: daily counts lead into three next tasks and seven upcoming days; saved learning, weekly evidence and dated health samples form the secondary column.
+- Priorities: rank overdue, due today, unscheduled and future tasks in that order, then priority and due date; never alter stored priorities.
+- Coverage: the existing briefing returns at most 40 open tasks; show that limit when reached and provide All tasks.
+- Learning: display a saved next step from any active learning topic, with a direct route to the learning log; remove the fixed Python promotion.
+- Health: keep water in Physical goals; show phone delivery time and at most the latest sleep/heart-rate records with units, timestamps and an older-than-24h label, never treat samples as daily averages.
+- Empty states: give concrete next actions without inventing plans or progress; distinguish unavailable data from an empty list and retain usable sections after partial failures.
+- Data: reuse existing authenticated endpoints and refresh on return to the tab, local day changes and explicit Refresh; no new service, migration or scheduled worker.
+- Motion: retain confirmed completion, sliding selections and reduced-motion support; add only a brief hover response to the decorative lamp/steam.
+
+Validation uses mocked records for priority ordering, linked exam labels, arbitrary learning topics, dated health readings, mobile overflow, empty and failed-source states. Production data is not changed by these checks.

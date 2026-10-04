@@ -6,7 +6,7 @@ test("confirmed task, journal and concept-review feedback with safe busy and err
   await page.goto("/");
   await page.getByLabel("Password", { exact: true }).fill(password!);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Your focus today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Start here", exact: true })).toBeVisible();
   const token = await page.evaluate(() => sessionStorage.getItem("life-os-token"));
   const headers = { Authorization: "Bearer " + token };
   const created: [string, string][] = [];

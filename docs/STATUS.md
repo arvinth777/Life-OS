@@ -80,3 +80,10 @@ The configured production login no longer exposes the server-address setup contr
 Motion follows user actions: a moving tab underline, responsive button/icon presses, input focus, editor entrance/dismissal with focus restoration, confirmed task completion/collapse, metric updates, chart drawing, progress fills and confirmation dismissal. Record loading uses placeholders; existing records remain visible during refresh. Reduced-motion preferences disable motion while keeping all state feedback. Native CSS and Web Animations preserve the existing dependency footprint.
 
 Validation: three isolated component interaction checks cover loading, mobile tab alignment, dialog keyboard/focus, delayed/failed completion, confirmation dismissal and reduced motion. Two production-build checks cover the simplified login/error state, mobile overflow and the actual dashboard/editor. All use mock API responses; no production records are changed. Visual checks used the local preview. No new wearable, calendar, AI or DSA functionality is claimed by this update.
+
+
+## Overview and reference palette — 4 October 2026
+
+Life OS uses a consistent midnight/navy palette with amber actions, blue and teal accents, and a small original pixel workroom. Overview now draws on the existing daily briefing, calendar and weekly review: ranked task actions, seven upcoming days with linked exam labels, any saved learning next step, weekly activity, compact streaks, delivery freshness and dated sleep/heart-rate samples when available. No water tracker or fixed Python promotion appears on Overview. Empty, partial-failure and capped-priority views explain their limits. No database, API deployment or paid dependency change is needed.
+
+The Overview regression checks cover real-data ordering using fixtures, exam labels, learning deep links, mobile overflow, empty states, partial failures and older health samples. These are isolated UI checks, not live integrations. Existing motion/keyboard checks and the production build are also run for this release.

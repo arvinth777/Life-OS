@@ -34,10 +34,11 @@ import {
 } from "./screens";
 import { DSA } from "./dsa";
 import { Physical } from "./physical";
-import { VoxelScene } from "./VoxelScene";
+import { NightScene } from "./NightScene";
+import { Overview } from "./Overview";
 import { SuccessFeedback, CompleteTask } from "./feedback";
 const navigation = [
-  ["home", "Today", Home],
+  ["home", "Overview", Home],
   ["journal", "Journal", BookOpen],
   ["personality", "Personal growth", Compass],
   ["academics", "Academics", GraduationCap],
@@ -61,6 +62,7 @@ const subtitles: any = {
 };
 export default function App() {
   const [session, setSession] = useState(!!authToken());
+  const [section, setSection] = useState("");
   const [page, setPage] = useState(location.hash.slice(1) || "home");
   const [schema, setSchema] = useState<any>({});
   const [settings, setSettings] = useState<Record<string, any>>({});
@@ -69,7 +71,8 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [quick, setQuick] = useState("");
   const reload = () => setRefresh((x) => x + 1);
-  const navigate = (p: string) => {
+  const navigate = (p: string, tab = "") => {
+    setSection(tab);
     location.hash = p;
     setPage(p);
     window.scrollTo(0, 0);
@@ -111,7 +114,7 @@ export default function App() {
         }}
       />
     );
-  const props = { schema, settings, refresh, onRefresh: reload, navigate };
+  const props = { schema, settings, refresh, onRefresh: reload, navigate, initialTab: section };
   return (
     <div className="app-shell">
       <a
@@ -142,7 +145,7 @@ export default function App() {
               {[0, 1, 3, 6].includes(i) && (
                 <span className="nav-group">
                   {i === 0
-                    ? "Overview"
+                    ? "Your day"
                     : i === 1
                       ? "Reflect"
                       : i === 3
@@ -204,12 +207,6 @@ export default function App() {
               </h1>
               {page !== "home" && <p>{subtitles[page]}</p>}
             </div>
-            {page === "home" && (
-              <button className="primary" onClick={() => setQuick("tasks")}>
-                <Plus size={17} />
-                New task
-              </button>
-            )}
           </header>
           {error ? (
             <div className="error" role="alert">
@@ -221,7 +218,7 @@ export default function App() {
           ) : (
             <div className="page-content" key={`content-${page}`}>
               {page === "home" ? (
-                <Today {...props} onQuick={setQuick} />
+                <Overview {...props} onQuick={setQuick} />
               ) : page === "journal" ? (
                 <Journal {...props} />
               ) : page === "personality" ? (
@@ -294,7 +291,7 @@ function Login({ onLogin }: any) {
           <br />
           you’re working on.
         </p>
-        <VoxelScene />
+        <NightScene />
         <div className="login-index">
           Reflect <span>01</span>
           <br />
@@ -362,169 +359,5 @@ function Login({ onLogin }: any) {
         </small>
       </section>
     </main>
-  );
-}
-function Today({ refresh, onRefresh, navigate, onQuick }: any) {
-  const [data, setData] = useState<any>();
-  const [reminders, setReminders] = useState<any[]>([]);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    Promise.all([api("/dashboard"), api("/reminders")])
-      .then(([a, b]) => {
-        setData(a);
-        setReminders(b);
-      })
-      .catch((e) => setError(e.message));
-  }, [refresh]);
-  if (!data) return error ? <p role="alert">{error}</p> : <LoadingRows label="Loading today…" />;
-  return (
-    <>
-      {error && <p className="error">{error}</p>}
-      <div className="today-columns">
-        <div>
-          <Panel
-            title="Your focus today"
-            action={
-              <button className="text-button" onClick={() => navigate("tasks")}>
-                All tasks <ArrowUpRight size={15} />
-              </button>
-            }
-          >
-            {data.tasks.length ? (
-              data.tasks.map((task: any) => (
-                <div className="task-row" key={task.id}>
-                  <CompleteTask task={task} onRefresh={onRefresh} compact />
-                  <div>
-                    <strong>{task.title}</strong>
-                    <small>{fmt(task.due_at)}</small>
-                  </div>
-                  <span className={"priority p" + task.priority}>
-                    {["", "Low", "Normal", "High", "Urgent"][task.priority]}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <Empty
-                text="No tasks due today."
-                action={
-                  <button onClick={() => onQuick("tasks")}>
-                    <Plus size={16} />
-                    Add a task
-                  </button>
-                }
-              />
-            )}
-          </Panel>
-          <Panel
-            title="On the calendar"
-            action={
-              <button
-                className="text-button"
-                onClick={() => navigate("calendar")}
-              >
-                Open calendar
-                <ArrowUpRight size={15} />
-              </button>
-            }
-          >
-            {data.agenda.length ? (
-              data.agenda.map((e: any) => (
-                <div className="agenda-row" key={e.id + e.starts_at}>
-                  <span>
-                    {new Date(e.starts_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      timeZone: data.timezone,
-                    })}
-                  </span>
-                  <div>
-                    <strong>{e.title}</strong>
-                    <small>{e.description}</small>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <Empty
-                text="Your calendar is clear today."
-                action={
-                  <button
-                    className="text-button"
-                    onClick={() => onQuick("calendar_events")}
-                  >
-                    Add an event
-                    <Plus size={15} />
-                  </button>
-                }
-              />
-            )}
-          </Panel>
-        </div>
-        <div>
-          <section className="learning-summary">
-            <h2>Python practice</h2>
-            <p>{data.reviews_due
-              ? `${data.reviews_due} concept ${data.reviews_due === 1 ? "note is" : "notes are"} due for review.`
-              : "No concept reviews due. Continue with a lesson when you have time."}</p>
-            <button onClick={() => navigate("dsa")}>
-              Open your learning path <ArrowRight size={17} />
-            </button>
-          </section>
-          <section className="habit-summary" aria-labelledby="habit-heading">
-            <h2 id="habit-heading">Keep showing up</h2>
-            {Object.entries(data.streaks).map(([name, count]: any) => (
-              <div className="habit-row" key={name}>
-                <span>{name}</span><strong>{count} <small>{count === 1 ? "day" : "days"}</small></strong>
-              </div>
-            ))}
-          </section>
-          {reminders.some((r) => r.kind !== "water") && <Panel title="Reminders">
-
-            {reminders.length ? (
-              reminders.filter((r) => r.kind !== "water").map((r) => (
-                <div className="reminder" key={r.id}>
-                  <div>
-                    {r.kind === "journal" ? <BookOpen size={17} /> : <ListTodo size={17} />}
-                    <span>{r.title}</span>
-                  </div>
-                  <div className="reminder-actions">
-                  <button className="text-button" onClick={() => r.kind === "journal" ? onQuick("journal_entries") : navigate("tasks")}>
-                    {r.kind === "journal" ? "Write an entry" : "View tasks"}
-                  </button>
-                  <button
-                    className="text-button"
-                    onClick={async () => {
-                      try {
-                        await api("/data/reminder_dismissals", "POST", {
-                          rule_id: r.id,
-                          occurrence_key: r.occurrence_key,
-                        });
-                        onRefresh();
-                      } catch (e) {
-                        setError(e.message);
-                      }
-                    }}
-                  >
-                    Dismiss
-                  </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="muted">Nothing needs a nudge right now.</p>
-            )}
-          </Panel>}
-          {!reminders.some((r) => r.kind === "journal") && <button
-            className="journal-shortcut"
-            onClick={() => onQuick("journal_entries")}
-          >
-            <BookOpen size={20} />
-            <span>
-              Write a journal entry
-            </span>
-            <ArrowUpRight size={18} />
-          </button>}
-        </div>
-      </div>
-    </>
   );
 }

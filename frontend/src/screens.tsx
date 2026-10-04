@@ -310,7 +310,7 @@ export function Personality(p: any) {
   );
 }
 export function Academic(p: any) {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(p.initialTab || "overview");
   const [data, setData] = useState<any>({ courses: [], terms: [] });
   const [error, setError] = useState("");
   useEffect(() => {
@@ -402,7 +402,7 @@ export function Academic(p: any) {
   );
 }
 export function Work(p: any) {
-  const [tab, setTab] = useState("projects");
+  const [tab, setTab] = useState(p.initialTab || "projects");
   return (
     <>
       <Tabs

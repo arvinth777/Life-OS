@@ -32,7 +32,7 @@ test('production workspace renders and opens its actual editor', async ({page}) 
   await page.goto('/');
   await page.getByLabel('Password', {exact:true}).fill('test-only-not-a-password');
   await page.getByRole('button', {name:'Sign in',exact:true}).click();
-  await expect(page.getByRole('heading', {name:'Your focus today'})).toBeVisible();
+  await expect(page.getByRole('heading', {name:'Start here'})).toBeVisible();
   await page.screenshot({path:'/tmp/life-os-workspace-motion.png',fullPage:true});
   await page.getByRole('button', {name:'New task',exact:true}).click();
   await expect(page.getByRole('dialog')).toBeVisible();

@@ -14,7 +14,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
   await page.getByLabel("Password", { exact: true }).fill(password!);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Today", exact: true }),
+    page.getByRole("heading", { name: "Overview", exact: true }),
   ).toBeVisible();
   const token = await page.evaluate(() =>
     sessionStorage.getItem("life-os-token"),
@@ -279,7 +279,7 @@ test("owner workflows, nine modules, responsive widths, and disabled integration
     }
     await page.goto("/#home");
     await expect(
-      page.getByRole("heading", { name: "Your focus today", exact: true }),
+      page.getByRole("heading", { name: "Start here", exact: true }),
     ).toBeVisible();
     await page.screenshot({
       path: process.env.LIFE_OS_SCREENSHOT || "/tmp/life-os-desktop.png",

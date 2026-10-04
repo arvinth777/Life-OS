@@ -6,6 +6,7 @@ import { CompleteTask, SuccessFeedback, ValueBar, savedFeedback } from '../src/f
 import '../src/style.css';
 import '../src/pixel.css';
 import '../src/interactions.css';
+import '../src/night.css';
 function Fixture() {
   const [active, setActive] = useState('one');
   const [open, setOpen] = useState(false);
