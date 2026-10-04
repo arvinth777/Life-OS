@@ -26,21 +26,28 @@ export function SuccessMark({ burst = false }: { burst?: boolean }) {
 }
 export function SuccessFeedback() {
   const [notice, setNotice] = useState<any>();
+  const [leaving, setLeaving] = useState(false);
   useEffect(() => {
-    const handler = (event: Event) => setNotice({ ...(event as CustomEvent).detail, id: crypto.randomUUID() });
+    const handler = (event: Event) => { setLeaving(false); setNotice({ ...(event as CustomEvent).detail, id: crypto.randomUUID() }); };
     window.addEventListener(eventName, handler);
     return () => window.removeEventListener(eventName, handler);
   }, []);
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(undefined), 4500);
+    const timer = window.setTimeout(() => setLeaving(true), 4500);
     return () => window.clearTimeout(timer);
   }, [notice]);
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = window.setTimeout(() => { setNotice(undefined); setLeaving(false); },
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
+    return () => window.clearTimeout(timer);
+  }, [leaving]);
   return <div className="feedback-region" role="status" aria-live="polite" aria-atomic="true">
-    {notice && <div className="save-receipt" key={notice.id}>
+    {notice && <div className={"save-receipt" + (leaving ? " leaving" : "")} key={notice.id}>
       <SuccessMark burst />
       <div><strong>{notice.message}</strong>{notice.detail && <small>{notice.detail}</small>}</div>
-      <button className="icon" aria-label="Dismiss confirmation" onClick={() => setNotice(undefined)}><X size={17} /></button>
+      <button className="icon" aria-label="Dismiss confirmation" onClick={() => setLeaving(true)}><X size={17} /></button>
     </div>}
   </div>;
 }
@@ -51,11 +58,15 @@ export function CompleteTask({ task, onRefresh, compact = false }: any) {
   const [state, setState] = useState("idle");
   const [error, setError] = useState("");
   const locked = useRef(false);
-  return <span className="task-completion">
+  const element = useRef<HTMLSpanElement>(null);
+  const exit = useRef<Animation | null>(null);
+  useEffect(() => () => { exit.current?.cancel(); }, []);
+  return <span ref={element} className="task-completion">
     <button
       className={(compact ? "check-button " : "") + "complete-action " + state}
       aria-label={compact ? "Complete " + task.title : undefined}
       disabled={state !== "idle"}
+      aria-busy={state === "saving"}
       onClick={async () => {
         if (locked.current) return;
         locked.current = true;
@@ -65,6 +76,15 @@ export function CompleteTask({ task, onRefresh, compact = false }: any) {
           setState("done");
           savedFeedback("Task completed", task.title);
           await confirmationPause();
+          const row = element.current?.closest<HTMLElement>(".task-row");
+          if (row && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            // Collapse only after the server confirms completion; never hide a failed save.
+            exit.current = row.animate([
+              { height: `${row.getBoundingClientRect().height}px`, opacity: .55 },
+              { height: "0px", paddingTop: "0px", paddingBottom: "0px", borderWidth: "0px", opacity: 0 },
+            ], { duration: 220, easing: "cubic-bezier(.22, 1, .36, 1)", fill: "forwards" });
+            await exit.current.finished.catch(() => {});
+          }
           onRefresh();
         } catch (e) {
           setState("idle"); locked.current = false;

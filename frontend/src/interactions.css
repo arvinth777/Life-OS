@@ -73,3 +73,92 @@
 @keyframes muscle-light { 0% { opacity: .15; } 55% { opacity: 1; } 75% { opacity: .7; } 100% { opacity: 1; } }
 @keyframes point-plot { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
 @media (max-width: 768px) { .feedback-region { right: 16px; bottom: 16px; } }
+
+/* Interaction rhythm: press 110ms, selection 320ms, large surfaces 380ms.
+   CSS/WAAPI-friendly transforms keep motion local without a runtime dependency. */
+:root { --motion-settle: cubic-bezier(.22, 1, .36, 1); --motion-spring: cubic-bezier(.2, 1.35, .4, 1); }
+.motion-tabs { position: relative; gap: 18px; }
+.motion-tabs button { flex-shrink: 0; border-bottom: 3px solid transparent; }
+.motion-tabs button.active::after { display: none; }
+.motion-tabs .tab-marker { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--color-accent); border-radius: 3px 3px 0 0; pointer-events: none; }
+.metric-value { display: inline-block; font-variant-numeric: tabular-nums; }
+.loading-rows { padding: 12px 0; }
+.loading-rows > div { display: flex; gap: 16px; align-items: center; padding: 18px 0; border-bottom: 1px solid var(--color-rule); }
+.loading-rows i, .loading-rows span:not(.sr-only), .loading-rows b { display: block; background: var(--color-soft); border-radius: 4px; height: 12px; }
+.loading-rows i { width: 28px; height: 28px; }
+.loading-rows span:not(.sr-only) { width: 48%; }
+.loading-rows b { width: 16%; margin-left: auto; }
+.loading-rows > div:nth-of-type(2) span { width: 36%; }
+.loading-rows > div:nth-of-type(3) span { width: 42%; }
+button[aria-busy="true"] { cursor: progress; }
+button.primary[aria-busy="true"]::before, .complete-action.saving::before {
+  content: ""; width: 14px; height: 14px; flex-shrink: 0; border: 2px solid currentColor;
+  border-right-color: transparent; border-radius: 50%;
+}
+.complete-action.saving > svg { display: none; }
+.task-row:has(.complete-action.done) { overflow: hidden; }
+.task-row:has(.complete-action.done) strong { text-decoration: line-through; color: var(--color-muted); }
+@media (prefers-reduced-motion: no-preference) {
+  button { transition: transform 180ms var(--motion-spring), background-color 180ms ease, box-shadow 180ms ease, color 180ms ease; }
+  button:not(:disabled):active { transform: translateY(1px) scale(.97); transition-duration: 70ms; }
+  button > svg { transition: transform 260ms var(--motion-spring); }
+  button:not(:disabled):hover > .lucide-plus { transform: rotate(90deg); }
+  button:not(:disabled):hover > .lucide-arrow-up-right { transform: translate(2px, -2px); }
+  button:not(:disabled):hover > .lucide-arrow-right { transform: translateX(3px); }
+  .nav-item:not(:disabled):hover > svg { transform: translateX(2px); }
+  .nav-item.selected .nav-indicator { animation: check-pop 350ms var(--motion-spring); }
+  input, textarea, select { transition: border-color 180ms ease, box-shadow 220ms ease, background-color 180ms ease; }
+  input:focus, textarea:focus, select:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-accent-soft); }
+  input[type="checkbox"] { transition: transform 160ms var(--motion-spring); }
+  input[type="checkbox"]:checked { animation: check-pop 280ms var(--motion-spring); }
+  .motion-tabs .tab-marker { transition: transform 360ms var(--motion-settle), width 280ms var(--motion-settle); }
+  .motion-tabs button:hover, .motion-tabs button:active { transform: none; }
+  .metric-value { animation: value-arrive 420ms var(--motion-settle); }
+  .panel, .hydration, .daily-readings { animation: surface-arrive 380ms var(--motion-settle) both; }
+  .panel:nth-child(2) { animation-delay: 45ms; }
+  .panel:nth-child(3) { animation-delay: 90ms; }
+  .entry-list button, .curriculum-outline button, .task-row, .agenda-row, tbody tr { transition: background-color 220ms ease, opacity 220ms ease, transform 280ms var(--motion-settle); }
+  .entry-list button.active, .curriculum-outline button.active { animation: selection-arrive 300ms var(--motion-settle); }
+  tbody tr, .task-row, .agenda-row { animation: row-arrive 280ms var(--motion-settle) both; }
+  tbody tr:nth-child(2), .task-row:nth-child(2), .agenda-row:nth-child(2) { animation-delay: 30ms; }
+  tbody tr:nth-child(3), .task-row:nth-child(3), .agenda-row:nth-child(3) { animation-delay: 60ms; }
+  .task-row:has(.complete-action.done) { opacity: .55; }
+  .table-wrap[aria-busy="true"] { opacity: .65; transition: opacity 180ms ease; }
+  dialog[open] { animation: dialog-arrive 360ms var(--motion-settle); }
+  dialog[open]::backdrop { animation: backdrop-arrive 240ms ease; }
+  dialog.closing { animation: dialog-leave 160ms ease-in forwards; pointer-events: none; }
+  dialog.closing::backdrop { animation: backdrop-leave 160ms ease-in forwards; }
+  .save-receipt.leaving { animation: receipt-leave 180ms ease-in forwards; }
+  .error[role="alert"], .notice { animation: explanation-arrive 220ms var(--motion-settle); }
+  .loading-rows > div { animation: loading-breathe 1400ms ease-in-out infinite alternate; }
+  .loading-rows > div:nth-of-type(2) { animation-delay: 120ms; }
+  .loading-rows > div:nth-of-type(3) { animation-delay: 240ms; }
+  button[aria-busy="true"]::before, .water-tank[aria-busy="true"] svg.lucide-refresh-cw { animation: busy-turn 800ms linear infinite; }
+  .chart-line.chart-reveal { stroke-dasharray: 1; animation: chart-draw 800ms var(--motion-settle) both; }
+  .value-bar > i { transition: transform 650ms var(--motion-settle); }
+  .body-maps .muscle path { transition: fill 450ms ease, opacity 350ms ease; }
+  .login-form { animation: surface-arrive 500ms var(--motion-settle); }
+  @supports (interpolate-size: allow-keywords) {
+    details { interpolate-size: allow-keywords; }
+    details::details-content { block-size: 0; overflow: clip; opacity: 0; transition: block-size 320ms var(--motion-settle), opacity 220ms ease, content-visibility 320ms allow-discrete; }
+    details[open]::details-content { block-size: auto; opacity: 1; }
+  }
+}
+@keyframes value-arrive { from { opacity: .25; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes surface-arrive { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@keyframes row-arrive { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes selection-arrive { from { background-color: var(--color-accent-soft); } }
+@keyframes dialog-arrive { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes dialog-leave { to { opacity: 0; transform: translateY(10px) scale(.985); } }
+@keyframes backdrop-arrive { from { opacity: 0; } to { opacity: 1; } }
+@keyframes backdrop-leave { to { opacity: 0; } }
+@keyframes receipt-leave { to { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes loading-breathe { from { opacity: .45; } to { opacity: 1; } }
+@keyframes busy-turn { to { transform: rotate(360deg); } }
+@keyframes chart-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+/* No movement, but every selected, busy and completed state remains legible. */
+@media (prefers-reduced-motion: reduce) {
+  .motion-tabs .tab-marker, dialog, dialog::backdrop, .loading-rows *, .metric-value,
+  button::before, button > svg, .chart-line { animation: none !important; transition: none !important; }
+  button:hover, button:active { transform: none !important; }
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Plus, X, Trash2, Pencil, Check, ArrowRight } from "lucide-react";
 import { api, title, fmt, localInput } from "./api";
 import { recordFeedback } from "./feedback";
@@ -37,7 +37,7 @@ export function Metric({ label, value, unit, children }: any) {
     <div className="metric">
       <span>{label}</span>
       <div>
-        <strong>{value}</strong>
+        <strong className="metric-value" key={String(value)}>{value}</strong>
         <small>{unit}</small>
       </div>
       {children}
@@ -46,21 +46,38 @@ export function Metric({ label, value, unit, children }: any) {
 }
 export function Modal({ title: heading, onClose, children }: any) {
   const ref = useRef<HTMLDialogElement>(null);
+  const opener = useRef(document.activeElement as HTMLElement | null);
+  const [closing, setClosing] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function dismiss() {
+    if (closing) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { onClose(); return; }
+    setClosing(true);
+    timer.current = setTimeout(onClose, 160);
+  }
   useEffect(() => {
-    ref.current?.showModal();
-    return () => ref.current?.close();
+    const dialog = ref.current;
+    dialog?.showModal();
+    dialog?.querySelector<HTMLElement>('input:not([type="hidden"]):not(:disabled), textarea:not(:disabled), select:not(:disabled)')?.focus({ preventScroll: true });
+    return () => {
+      clearTimeout(timer.current);
+      dialog?.close();
+      if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+    };
   }, []);
   return (
     <dialog
       ref={ref}
-      onCancel={onClose}
+      className={closing ? "closing" : ""}
+      aria-label={heading}
+      onCancel={(e) => { e.preventDefault(); dismiss(); }}
       onClick={(e) => {
-        if (e.target === ref.current) onClose();
+        if (e.target === ref.current) dismiss();
       }}
     >
       <div className="modal-head">
         <h2>{heading}</h2>
-        <button className="icon" onClick={onClose} aria-label="Close">
+        <button className="icon" onClick={dismiss} aria-label="Close">
           <X size={20} />
         </button>
       </div>
@@ -355,7 +372,7 @@ export function Records({
   const [refs, setRefs] = useState<any>({});
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const paged = table === "health_records";
   useEffect(() => {
     let active = true;
@@ -437,8 +454,8 @@ export function Records({
           {error}
         </p>
       )}
-      {shown.length ? (
-        <div className="table-wrap">
+      {loading && !records.length ? <LoadingRows /> : shown.length ? (
+        <div className="table-wrap" aria-busy={loading}>
           <table>
             <thead>
               <tr>
@@ -510,9 +527,31 @@ export function Records({
     </Panel>
   );
 }
+export function LoadingRows({ label = "Loading your records…" }: { label?: string }) {
+  return <div className="loading-rows" role="status" aria-label={label}>
+    <span className="sr-only">{label}</span>
+    {[0, 1, 2].map((n) => <div key={n} aria-hidden="true"><i /><span /><b /></div>)}
+  </div>;
+}
 export function Tabs({ items, active, onChange }: any) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [marker, setMarker] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const measure = () => {
+      const button = root.querySelector<HTMLButtonElement>("button.active");
+      if (button) setMarker({ left: button.offsetLeft, width: button.offsetWidth });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    root.querySelectorAll("button").forEach((button) => observer.observe(button));
+    return () => observer.disconnect();
+  }, [active, items.map((x: any) => x.join(":")).join("|")]);
   return (
-    <div className="tabs" aria-label="Sections">
+    <div ref={ref} className="tabs motion-tabs" aria-label="Sections">
+      <span className="tab-marker" aria-hidden="true" style={{ width: marker.width, transform: `translateX(${marker.left}px)` }} />
       {items.map((x: any) => (
         <button
           key={x[0]}
@@ -540,7 +579,7 @@ export function Trend({ values, label, min = 0, max }: any) {
     <div className="trend">
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
         <path d="M20 10V130H580" className="chart-axis" />
-        <polyline key={points} points={points} className="chart-line chart-reveal" />
+        <polyline key={points} points={points} pathLength="1" className="chart-line chart-reveal" />
         {values.map((n: number, i: number) => (
           <circle
             key={`${i}-${n}`}

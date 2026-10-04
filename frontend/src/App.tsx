@@ -21,6 +21,7 @@ import {
   Editor,
   Panel,
   Empty,
+  LoadingRows,
 } from "./components";
 import {
   Journal,
@@ -216,7 +217,7 @@ export default function App() {
               <button onClick={reload}>Try again</button>
             </div>
           ) : !loaded ? (
-            <p role="status">Opening your workspace…</p>
+            <LoadingRows label="Opening your workspace…" />
           ) : (
             <div className="page-content" key={`content-${page}`}>
               {page === "home" ? (
@@ -307,8 +308,7 @@ function Login({ onLogin }: any) {
         <p>Sign in to your own space.</p>
         {missing && (
           <div className="notice">
-            The frontend is ready. Connect your Python API below to use your
-            saved data. There is no demonstration account.
+            Connect your data server below to finish setting up this copy of Life OS.
           </div>
         )}
         <form onSubmit={submit}>
@@ -331,7 +331,7 @@ function Login({ onLogin }: any) {
               required
             />
           </label>
-          <details open={missing}>
+          {!import.meta.env.VITE_API_URL && <details open={missing}>
             <summary>API connection</summary>
             <label>
               API address
@@ -346,14 +346,14 @@ function Login({ onLogin }: any) {
               Local development connects automatically. For a hosted app, use
               the address from your setup guide.
             </small>
-          </details>
+          </details>}
           {error && (
             <p className="error" role="alert">
               {error}
             </p>
           )}
-          <button className="primary" disabled={busy}>
-            {busy ? "Connecting…" : "Sign in"}
+          <button className="primary" disabled={busy} aria-busy={busy}>
+            {busy ? "Signing in…" : "Sign in"}
             <ArrowRight size={18} />
           </button>
         </form>
@@ -376,7 +376,7 @@ function Today({ refresh, onRefresh, navigate, onQuick }: any) {
       })
       .catch((e) => setError(e.message));
   }, [refresh]);
-  if (!data) return <p>{error || "Loading today…"}</p>;
+  if (!data) return error ? <p role="alert">{error}</p> : <LoadingRows label="Loading today…" />;
   return (
     <>
       {error && <p className="error">{error}</p>}
