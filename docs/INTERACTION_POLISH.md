@@ -52,3 +52,16 @@ The design stays a serious working surface, with short, game-like feedback tied 
 - Six nonblocking Taste warnings were retained; its console summary identifies copy-headline, copy-actions, section-gaps, skip-link on the login form, and share-meta. The brand and copy are existing product content; no public marketing/share page was introduced. Signed-in navigation retains its skip link.
 - Existing pixel illustration, system font stack, and interaction feedback are retained. No photos, assumed claims, paid services, runtime dependencies, or marketing sections were added.
 - Backend logic, sync workflows, and full module end-to-end regression were not retested for this visual-only pass; the live health endpoint responded successfully. Mobile checks use browser viewports, not physical phone hardware.
+
+## Distill pass
+
+Core purpose: choose the next action in the current mode.
+
+- Remove the repeated greeting/emblem and the Work task-count card; refresh moves beside the page heading, and projects remain in Work and the projects list.
+- Show tasks and upcoming dates first, with study/workout continuation and history below; retain mode-specific desktop arrangements.
+- Keep one global Quick add, shorten empty states, and show energy filtering only when there are tasks to filter.
+- Reveal per-task context/energy editors through native keyboard-accessible Organize task disclosures; the full task list keeps its direct controls.
+- Flatten supporting notes, calendar, and sleep sections; only Quick add uses the primary action colour.
+- Retain all modules, saved records, activity grids, weekly review, reset, experiments, and existing motion/reduced-motion behaviour. No backend change.
+
+Validation: the production build passes. A temporary task in the local PostgreSQL database verified keyboard disclosure, energy editing with persisted read-back, context preservation, energy-filter empty/reset states, and direct access to the full task list. The temporary record was removed after checking. The changed-file Impeccable detector returned no findings. Desktop and mobile checks covered the three modes, empty/populated tasks, and horizontal overflow. Production records and integration workflows were not modified or retested.

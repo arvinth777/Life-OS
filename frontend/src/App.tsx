@@ -15,6 +15,7 @@ import {
   Plus,
   ArrowRight,
   PanelLeft,
+  RefreshCw,
 } from "lucide-react";
 import { api, authToken, base, clearAuthToken, saveAuthToken, setBase, setZone, fmt } from "./api";
 import {
@@ -209,6 +210,7 @@ export default function App() {
               </h1>
               {page !== "home" && <p>{subtitles[page]}</p>}
             </div>
+            {page === "home" && <button className="icon" aria-label="Refresh workspace" onClick={reload}><RefreshCw size={18}/></button>}
           </header>
           {error ? (
             <div className="error" role="alert">
@@ -220,7 +222,7 @@ export default function App() {
           ) : (
             <div className="page-content" key={`content-${page}-${mode}`}>
               {page === "home" ? (
-                <ContextHome {...props} onCapture={()=>setCapture(true)} />
+                <ContextHome {...props} />
               ) : page === "journal" ? (
                 <Journal {...props} />
               ) : page === "personality" ? (

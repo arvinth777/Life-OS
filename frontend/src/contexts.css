@@ -28,31 +28,20 @@ html[data-mode="personal"] {
 .mode-slider {position:absolute;top:5px;bottom:5px;left:5px;width:calc((100% - 10px)/3);background:var(--nav-selected);border:1px solid var(--color-rule);border-radius:9px;transform:translateX(calc(var(--mode-index)*100%));z-index:0;box-shadow:0 3px 8px #0002}
 .context-toolbar .quick-add-button {white-space:nowrap;min-height:47px}
 .app-shell .page-head {margin-bottom:20px;border:0;padding-bottom:0}
-.context-intro {display:flex;gap:16px;align-items:center;margin:0 0 24px}
-.context-intro > div {flex:1;min-width:0}
-.context-intro h2 {font-size:clamp(20px,1.8vw,25px);line-height:1.3;margin:0;letter-spacing:-.025em;font-weight:500}
-.context-intro p {margin:6px 0 0;color:var(--color-muted);font-size:16px}
-.context-emblem {height:48px;width:48px;display:grid;place-items:center;flex-shrink:0;color:var(--color-accent);background:var(--nav-selected);border:1px solid var(--color-rule);border-radius:12px}
-.context-layout {display:grid;gap:22px;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);grid-template-areas:"focus dates" "tasks dates" "tasks notes"}
+.context-layout {display:grid;gap:22px;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);grid-template-areas:"tasks dates" "notes dates"}
 .context-layout > * {min-width:0;margin:0}
 .context-focus {grid-area:focus;background:var(--color-surface);border:1px solid var(--color-rule);border-radius:12px;padding:28px;position:relative;overflow:hidden}
-.context-focus h2 {font-size:clamp(24px,2.7vw,34px);font-weight:500;letter-spacing:-.035em;line-height:1.2;margin:0;overflow-wrap:anywhere}
+.context-focus h2 {font-size:clamp(22px,2vw,28px);font-weight:500;letter-spacing:-.035em;line-height:1.2;margin:0;overflow-wrap:anywhere}
 .context-focus p {font-size:16px;line-height:1.65;color:var(--color-text);max-width:60ch;margin:14px 0 20px;white-space:pre-wrap}
-.context-focus button {background:var(--color-accent);color:var(--color-accent-ink);border:0;margin-top:8px;min-height:44px}
+.context-focus button {background:var(--color-soft);color:var(--color-ink);border:1px solid var(--color-rule);margin-top:8px;min-height:44px}
 .context-layout .panel {padding:24px}
 .context-layout .section-head {gap:12px;align-items:start;flex-wrap:wrap;margin-bottom:16px}
 .context-layout .section-head h2 {font-size:19px}
 .context-layout p.muted {font-size:14px;line-height:1.6}
 .context-tasks {grid-area:tasks}.context-dates{grid-area:dates}.context-notes{grid-area:notes}.context-activity{grid-area:activity}.context-recovery{grid-area:recovery}
-.context-academics .context-layout {grid-template-areas:"focus tasks" "dates tasks" "activity activity" "notes notes";grid-template-columns:minmax(0,1.2fr) minmax(300px,1fr)}
-.context-academics .context-focus {border-color:var(--color-rule)}
-.context-personal .context-layout {grid-template-areas:"focus recovery" "tasks notes" "activity activity" "dates dates";grid-template-columns:minmax(0,1.4fr) minmax(270px,1fr)}
+.context-academics .context-layout {grid-template-areas:"tasks dates" "focus notes" "activity activity";grid-template-columns:minmax(0,1.2fr) minmax(300px,1fr)}
+.context-personal .context-layout {grid-template-areas:"tasks dates" "focus recovery" "notes notes" "activity activity";grid-template-columns:minmax(0,1.4fr) minmax(270px,1fr)}
 .context-personal .context-layout .panel,.context-personal .context-focus {border-radius:16px}
-.context-personal .context-emblem {border-radius:50%}
-.context-work .context-focus {display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px;padding:24px}
-.context-work .context-focus h2 {font:32px var(--font-mono)}
-.context-work .context-focus p {flex-basis:100%;margin:0}
-.context-work .context-focus button {margin-top:10px}
 .context-task {display:block;padding:18px 0;border-bottom:1px solid var(--color-rule)}
 .context-task:last-child {border-bottom:0;padding-bottom:0}
 .context-task-line {display:flex;align-items:start;gap:12px}
@@ -62,11 +51,14 @@ html[data-mode="personal"] {
 .context-task small {font-size:13px;line-height:1.5;margin:6px 0}
 .task-placement {display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .task-placement select {font-size:13px;padding:7px 27px 7px 9px;max-width:160px;width:auto;background:var(--color-paper);color:var(--color-text);min-height:44px}
-.context-task .task-placement {margin-left:38px}
+.task-organize {margin:8px 0 0 38px}
+.task-organize summary {cursor:pointer;color:var(--color-muted);font-size:13px;min-height:44px;padding:12px 0}
+.context-home .context-layout .context-dates,.context-home .context-layout .context-notes,.context-home .context-layout .context-recovery {background:transparent;border:0;border-radius:0;padding:16px 0;box-shadow:none}
+.context-layout .context-notes {border-top:1px solid var(--color-rule)}
 .energy-filter {display:flex;gap:5px;flex-wrap:wrap;margin:14px 0 4px}
 .energy-filter button {font-size:13px;padding:9px 12px;border:1px solid var(--color-rule);background:transparent;color:var(--color-muted);border-radius:7px}
 .energy-filter button[aria-pressed="true"] {color:var(--color-accent);background:var(--nav-selected);border-color:var(--color-accent)}
-.context-empty {padding:24px 0 8px;font-size:15px;color:var(--color-muted)}
+.context-empty {padding:8px 0;font-size:15px;color:var(--color-muted)}
 .context-empty button {margin-top:12px}
 .context-link {display:flex;align-items:center;gap:13px;width:100%;text-align:left;white-space:normal;padding:17px 0;border:0;border-bottom:1px solid var(--color-rule);border-radius:0;background:transparent;justify-content:start}
 .context-link > svg {color:var(--color-accent);flex-shrink:0}
@@ -101,25 +93,23 @@ html[data-mode="personal"] {
   .mode-switch button:active {transform:scale(.96)}
   .context-layout > * {animation:context-settle 420ms both cubic-bezier(.2,.8,.2,1)}
   .context-layout > :nth-child(2) {animation-delay:45ms}.context-layout > :nth-child(3) {animation-delay:80ms}.context-layout > :nth-child(n+4) {animation-delay:110ms}
-  .context-emblem {animation:context-emblem-in 500ms cubic-bezier(.2,.8,.2,1)}
   .context-link,.task-placement select {transition:background-color 180ms,border-color 180ms}
   .context-focus button:hover {transform:translateY(-2px)}
   .context-focus button:active {transform:translateY(1px)}
 }
 @keyframes context-settle {from {opacity:1;transform:translateY(8px)}to {opacity:1;transform:none}}
-@keyframes context-emblem-in {from {opacity:.2;transform:scale(.8) rotate(-8deg)}to {opacity:1;transform:none}}
 @media(max-width:1100px){
-  .context-layout,.context-academics .context-layout,.context-personal .context-layout {grid-template-columns:minmax(0,1fr);grid-template-areas:"focus" "tasks" "dates" "activity" "notes" "recovery"}
+  .context-layout,.context-academics .context-layout,.context-personal .context-layout {grid-template-columns:minmax(0,1fr);grid-template-areas:"tasks" "dates" "focus" "recovery" "notes" "activity"}
+  .context-work .context-layout {grid-template-areas:"tasks" "dates" "notes"}
+  .context-academics .context-layout {grid-template-areas:"tasks" "dates" "focus" "notes" "activity"}
   .context-toolbar {gap:10px}.mode-switch{width:400px}
 }
 @media(max-width:768px){
   .context-toolbar {flex-wrap:wrap;margin-bottom:25px}.mode-switch{width:100%;flex:1 1 100%}
   .context-toolbar .quick-add-button{width:100%;min-height:44px;padding:10px 16px}
-  .context-intro{align-items:start;gap:12px}.context-emblem{width:42px;height:42px}.context-emblem svg{width:22px}
-  .context-intro p{font-size:14px}.context-intro>.icon{padding:6px}
   .context-layout{gap:18px}.context-focus,.context-layout .panel{padding:20px}
   .context-layout .activity-panel{padding:18px 14px}.mode-switch button{padding:11px 6px;font-size:13px;gap:6px}
-  .context-task .task-placement{margin-left:0}.task-placement select{max-width:145px}
+  .task-organize{margin-left:0}.task-placement select{max-width:145px}
   .capture-fields{grid-template-columns:1fr}.capture-form .form-actions{flex-wrap:wrap}
   .context-home .section-head .text-button{font-size:13px;padding-left:0}
 }
