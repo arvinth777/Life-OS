@@ -31,3 +31,24 @@ The design stays a serious working surface, with short, game-like feedback tied 
 - No backend schema, sync behavior, or external integration changed. These are local checks against the local API.
 
 - Optimized local sign-in Lighthouse check: performance 94, accessibility 100, LCP 2.6 s, CLS 0, blocking time 0 ms. This simulated local result does not measure hosted API cold starts.
+
+## November 2026 colour and polish pass
+
+- Operate surface: preserve the private app, its data, navigation, and existing pixel feedback; no marketing-page sections or decorative effects.
+- Palette: charcoal surfaces and crisp text, with neutral Work, coral Academics, and emerald Personal actions; colour identifies selection rather than tinting every card.
+- Hierarchy: remove repeated decorative labels from focus cards, balance headings, and tighten the introduction spacing.
+- Touch: a full-width Quick add action on narrow screens and 44px task-placement controls.
+- Detail: consistent soft button/dialog shadows, themed selection and caret, explicit placeholder contrast, tabular numeric data, and restrained press feedback.
+- Motion: preserve water fill, confirmed-save feedback, mode changes, and reduced-motion support; add no animation dependency.
+
+### Validation and scope
+
+- Production TypeScript/Vite build passes. Shared foreground/background and action pairs exceed WCAG AA: minimum ratios are 5.65 (default/Personal), 5.73 (Work), and 6.15 (Academics).
+- Signed-in local UI inspected at desktop 1440px and mobile 390px; overflow and primary touch targets also checked at 320, 768, and 1024px. Quick add fits the viewport and remains at least 44px tall.
+- Keyboard focus remains visible in Quick add. Reduced-motion emulation reports no focus-card animation and a zero-duration mode transition. No data entry was submitted.
+- Impeccable detector ran once. Corrected decorative side stripes, obsolete login grid CSS, and animated tab width. Retained the transparent tab border (space for the selection marker) and the existing motion-spring token name (its curve now has no overshoot); these are narrow detector exceptions, not hidden findings.
+- Taste gate result: **GATE: FAIL 14 (round 1 of 3)**. Its isolated browser reaches the login page, not the authenticated app. No waivers were added. Remaining findings below are marketing-layout expectations; applying them would replace the requested app interface. Do not interpret this run as an authenticated app audit or a passing Taste gate.
+- Open findings: hero-fill, hero-screen, section-height, and one-section assume the sign-in form is a second full-screen marketing section; cta assumes the introductory artwork needs a separate action; copy-headline expects the brand heading to say what is sold; moment-none expects a promotional visual section; container and six container-edges findings require the kit's .wrap/header/footer markup; text-only expects imagery inside the sign-in form. These 14 findings are recorded rather than changing the working form to satisfy a landing-page template.
+- Six nonblocking Taste warnings were retained; its console summary identifies copy-headline, copy-actions, section-gaps, skip-link on the login form, and share-meta. The brand and copy are existing product content; no public marketing/share page was introduced. Signed-in navigation retains its skip link.
+- Existing pixel illustration, system font stack, and interaction feedback are retained. No photos, assumed claims, paid services, runtime dependencies, or marketing sections were added.
+- Backend logic, sync workflows, and full module end-to-end regression were not retested for this visual-only pass; the live health endpoint responded successfully. Mobile checks use browser viewports, not physical phone hardware.
