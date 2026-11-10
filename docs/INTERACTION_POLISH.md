@@ -65,3 +65,12 @@ Core purpose: choose the next action in the current mode.
 - Retain all modules, saved records, activity grids, weekly review, reset, experiments, and existing motion/reduced-motion behaviour. No backend change.
 
 Validation: the production build passes. A temporary task in the local PostgreSQL database verified keyboard disclosure, energy editing with persisted read-back, context preservation, energy-filter empty/reset states, and direct access to the full task list. The temporary record was removed after checking. The changed-file Impeccable detector returned no findings. Desktop and mobile checks covered the three modes, empty/populated tasks, and horizontal overflow. Production records and integration workflows were not modified or retested.
+
+## Modern motion pass
+
+- Focal moment: switching workspaces carries the active navigation marker, heading, tasks, dates, and continuation panel into their new positions using native view transitions.
+- Continuity: navigation remains immediate when unsupported or reduced motion is requested; a newer click supersedes any pending transition.
+- Feedback: stronger primary-button press, local icon response, expanding disclosures, a short dialog reveal, and a save-receipt lifetime indicator; reuse the existing confirmed-save and water animations.
+- Budget: no new library, continuous decorative loop, scroll listener, or canvas; 150–420ms interactions, bounded transform/opacity/clip effects, and no extra API calls.
+- Scope: App navigation, existing shared motion CSS, context CSS, and the existing save receipt. Preserve flat navigation styling and all data semantics.
+- API reference: https://developer.mozilla.org/en-US/docs/Web/API/Document/startViewTransition and https://developer.mozilla.org/en-US/docs/Web/API/ViewTransition/skipTransition.

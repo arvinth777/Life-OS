@@ -148,7 +148,7 @@ button.primary[aria-busy="true"]::before, .complete-action.saving::before {
 @keyframes surface-arrive { from { opacity: 1; transform: translateY(9px); } to { opacity: 1; transform: none; } }
 @keyframes row-arrive { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes selection-arrive { from { background-color: var(--color-accent-soft); } }
-@keyframes dialog-arrive { from { opacity: 1; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes dialog-arrive { from { opacity: 1; transform: translateY(20px) scale(.97); clip-path: inset(0 0 8% 0 round 14px); } to { opacity: 1; transform: none; clip-path: inset(0 round 14px); } }
 @keyframes dialog-leave { to { opacity: 0; transform: translateY(10px) scale(.985); } }
 @keyframes backdrop-arrive { from { opacity: 0; } to { opacity: 1; } }
 @keyframes backdrop-leave { to { opacity: 0; } }
@@ -162,3 +162,42 @@ button.primary[aria-busy="true"]::before, .complete-action.saving::before {
   button::before, button > svg, .chart-line { animation: none !important; transition: none !important; }
   button:hover, button:active { transform: none !important; }
 }
+
+/* Shared elements travel; the rest of the workspace stays live and clickable. */
+@media (prefers-reduced-motion: no-preference) {
+  :root { view-transition-name: none; }
+  .page-head { view-transition-name: workspace-heading; }
+  .sidebar .nav-indicator { view-transition-name: workspace-selection; }
+  .context-tasks { view-transition-name: workspace-tasks; }
+  .context-dates { view-transition-name: workspace-dates; }
+  .context-focus { view-transition-name: workspace-focus; }
+  ::view-transition { pointer-events: none; }
+  ::view-transition-group(*) { animation-duration: 380ms; animation-timing-function: var(--motion-settle); }
+  ::view-transition-old(workspace-heading) { animation: heading-out 120ms ease-in both; }
+  ::view-transition-new(workspace-heading) { animation: heading-in 320ms var(--motion-settle) both; }
+  ::view-transition-old(workspace-selection) { animation: none; opacity: 0; }
+  ::view-transition-new(workspace-selection) { animation: none; }
+  .quick-add-button { position: relative; isolation: isolate; overflow: hidden; }
+  .quick-add-button::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: #ffffff26; pointer-events: none; opacity: 0; transform: scale(.2); }
+  .quick-add-button:active::after { opacity: 1; transform: scale(1); transition: transform 220ms var(--motion-settle), opacity 100ms; }
+  .mode-switch button[aria-pressed="true"] svg { animation: mode-select 400ms var(--motion-settle); }
+  .task-organize summary { list-style: none; }
+  .task-organize summary::-webkit-details-marker { display: none; }
+  .task-organize summary::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 10px 2px 2px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform 220ms var(--motion-settle); }
+  .task-organize[open] > summary::before { transform: rotate(45deg); }
+  .save-receipt { position: relative; }
+  .save-receipt::after { content: ""; position: absolute; bottom: 1px; left: 5px; right: 5px; height: 2px; background: var(--color-success); transform-origin: left; animation: receipt-lifetime 4500ms linear forwards; }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .context-link:hover, .entry-list button:hover, .curriculum-outline button:hover { transform: translateX(3px); }
+  .sidebar .nav-item:hover > svg { transform: translateX(2px) scale(1.12); }
+  .app-shell .quick-add-button:hover { transform: translateY(-2px); box-shadow: 0 6px 18px #0005; }
+  .quick-add-button:active { transform: translateY(1px) scale(.97); }
+  button[aria-label="Refresh workspace"]:hover > svg { transform: rotate(65deg); }
+  .context-focus { transition: border-color 220ms ease; }
+  .context-focus:focus-within, .context-focus:hover { border-color: var(--color-accent); }
+}
+@keyframes heading-out { to { opacity: 0; transform: translateY(-6px); } }
+@keyframes heading-in { from { opacity: .5; transform: translateY(10px); clip-path: inset(0 0 100% 0); } to { opacity: 1; transform: none; clip-path: inset(0); } }
+@keyframes mode-select { 0% { transform: scale(.8); } 60% { transform: scale(1.12); } 100% { transform: none; } }
+@keyframes receipt-lifetime { to { transform: scaleX(0); } }

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   Home,
   BookOpen,
@@ -74,13 +75,37 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const pendingNavigation = useRef<{page:string;tab:string}|null>(null);
   const reload = () => setRefresh((x) => x + 1);
-  const navigate = (p: string, tab = "") => {
-    if (moduleMode[p]) setMode(moduleMode[p]);
-    setSection(tab);
-    pendingNavigation.current = location.hash.slice(1) !== p ? {page:p,tab} : null;
-    location.hash = p;
-    setPage(p);
-    window.scrollTo(0, 0);
+  const navigationMotion = useRef<ViewTransition | null>(null);
+  useEffect(() => () => {
+    navigationMotion.current?.skipTransition();
+    navigationMotion.current = null;
+  }, []);
+  const navigate = (p: string, tab = "", nextMode?: LifeMode) => {
+    const update = () => {
+      if (nextMode || moduleMode[p]) setMode(nextMode || moduleMode[p]);
+      setSection(tab);
+      pendingNavigation.current = location.hash.slice(1) !== p ? {page:p,tab} : null;
+      location.hash = p;
+      setPage(p);
+      window.scrollTo(0, 0);
+    };
+    navigationMotion.current?.skipTransition();
+    navigationMotion.current = null;
+    if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches || (p === page && tab === section && (!nextMode || nextMode === mode))) {
+      update();
+      return;
+    }
+    try {
+      const transition = document.startViewTransition(() => {
+        // A skipped transition can still run its callback after a newer click.
+        if (navigationMotion.current === transition) flushSync(update);
+      });
+      navigationMotion.current = transition;
+      transition.ready.catch(() => {});
+      transition.finished.catch(() => {});
+    } catch {
+      update();
+    }
   };
   useEffect(() => {
     const listener = () => { const next = location.hash.slice(1) || "home"; setPage(next); setSection(pendingNavigation.current?.page === next ? pendingNavigation.current.tab : ""); pendingNavigation.current = null; if (moduleMode[next]) setMode(moduleMode[next]); };
@@ -136,7 +161,11 @@ export default function App() {
       </a>
       <SuccessFeedback />
       <aside className="sidebar">
-        <a className="brand" href="#home" onClick={() => navigate("home")}>
+        <a className="brand" href="#home" onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          navigate("home");
+        }}>
           <span className="brand-mark">
             <PanelLeft size={23} />
           </span>
@@ -193,7 +222,7 @@ export default function App() {
           <div className="context-toolbar">
             <div className="mode-switch" role="group" aria-label="Workspace mode" style={{'--mode-index': modes.indexOf(mode)} as React.CSSProperties}>
               <span className="mode-slider" aria-hidden="true" />
-              {modes.map((m,i) => {const Icon=[Briefcase,GraduationCap,Compass][i];return <button key={m} aria-pressed={mode===m} onClick={()=>{setMode(m);navigate('home')}}><Icon size={17}/><span>{modeNames[m]}</span></button>})}
+              {modes.map((m,i) => {const Icon=[Briefcase,GraduationCap,Compass][i];return <button key={m} aria-pressed={mode===m} onClick={()=>navigate('home','',m)}><Icon size={17}/><span>{modeNames[m]}</span></button>})}
             </div>
             <button className="primary quick-add-button" disabled={!loaded} onClick={()=>setCapture(true)}><Plus size={17}/>Quick add</button>
           </div>

@@ -92,7 +92,7 @@ html[data-mode="personal"] {
   .mode-switch button:active {transform:scale(.96)}
   .context-layout > * {animation:context-settle 420ms both cubic-bezier(.2,.8,.2,1)}
   .context-layout > :nth-child(2) {animation-delay:45ms}.context-layout > :nth-child(3) {animation-delay:80ms}.context-layout > :nth-child(n+4) {animation-delay:110ms}
-  .context-link,.task-placement select {transition:background-color 180ms,border-color 180ms}
+  .context-link,.task-placement select {transition:background-color 180ms,border-color 180ms,transform 220ms var(--motion-settle)}
   .context-focus button:hover {transform:translateY(-2px)}
   .context-focus button:active {transform:translateY(1px)}
 }
