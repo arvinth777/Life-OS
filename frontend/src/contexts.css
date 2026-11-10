@@ -16,7 +16,6 @@ html[data-mode="personal"] {
 }
 .app-shell {background:var(--color-paper)}
 .app-shell .sidebar {background:var(--nav-surface)}
-.app-shell .sidebar .nav-item.selected {color:var(--color-accent);background:var(--nav-selected)}
 .app-shell .sidebar .brand-mark,.app-shell .sidebar .owner-avatar {background:var(--color-soft);color:var(--color-accent)}
 .app-shell button.primary {box-shadow:0 2px 8px #0003}
 .app-shell .sidebar .nav-item:hover {background:var(--color-soft)}
