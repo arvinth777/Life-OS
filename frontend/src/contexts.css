@@ -1,22 +1,18 @@
-/* One midnight identity, three purposeful workspaces. Mode is a device preference;
-   context on a record is saved in the database. */
+/* Mode is a device preference; context on a record is saved in the database. */
 html[data-mode="work"] {
-  --color-paper:#0c1119; --color-surface:#131c28; --color-soft:#202d3d;
-  --color-rule:#334255; --color-accent:#a5caff; --color-accent-hover:#c9e0ff;
-  --color-accent-soft:#233b58; --color-accent-ink:#101c2e;
-  --nav-surface:#0e1520; --nav-selected:#203550; --mode-glow:#234975;
+  --color-accent:#f0f3f2; --color-accent-hover:#ffffff;
+  --color-accent-soft:#2c3231; --color-accent-ink:#131716;
+  --nav-selected:#2c3231; --mode-glow:#3b4843;
 }
 html[data-mode="academics"] {
-  --color-paper:#100f1c; --color-surface:#1a182b; --color-soft:#29243d;
-  --color-rule:#433953; --color-accent:#efbf7b; --color-accent-hover:#ffdaa8;
-  --color-accent-soft:#3b2e28; --color-accent-ink:#241807;
-  --nav-surface:#141221; --nav-selected:#302739; --mode-glow:#594172;
+  --color-accent:#c1a3ff; --color-accent-hover:#dac8ff;
+  --color-accent-soft:#30243f; --color-accent-ink:#1d102e;
+  --nav-selected:#30243f; --mode-glow:#45315d;
 }
 html[data-mode="personal"] {
-  --color-paper:#0b1517; --color-surface:#122225; --color-soft:#1e3437;
-  --color-rule:#345052; --color-accent:#9cdbcb; --color-accent-hover:#baf1e2;
-  --color-accent-soft:#25453f; --color-accent-ink:#0b2421;
-  --nav-surface:#0d1b1d; --nav-selected:#1f3937; --mode-glow:#275a53;
+  --color-accent:#42dc9b; --color-accent-hover:#6ee8b2;
+  --color-accent-soft:#15382a; --color-accent-ink:#082217;
+  --nav-selected:#15382a; --mode-glow:#20503c;
 }
 .app-shell {background:var(--color-paper)}
 .app-shell .sidebar {background:var(--nav-surface)}
@@ -50,7 +46,7 @@ html[data-mode="personal"] {
 .context-layout p.muted {font-size:14px;line-height:1.6}
 .context-tasks {grid-area:tasks}.context-dates{grid-area:dates}.context-notes{grid-area:notes}.context-activity{grid-area:activity}.context-recovery{grid-area:recovery}
 .context-academics .context-layout {grid-template-areas:"focus tasks" "dates tasks" "activity activity" "notes notes";grid-template-columns:minmax(0,1.2fr) minmax(300px,1fr)}
-.context-academics .context-focus {border-left:4px solid var(--color-accent);border-radius:3px 12px 12px 3px;background:#211d33}
+.context-academics .context-focus {border-left:4px solid var(--color-accent);border-radius:3px 12px 12px 3px;background:var(--color-surface)}
 .context-personal .context-layout {grid-template-areas:"focus recovery" "tasks notes" "activity activity" "dates dates";grid-template-columns:minmax(0,1.4fr) minmax(270px,1fr)}
 .context-personal .context-layout .panel,.context-personal .context-focus {border-radius:20px}
 .context-personal .context-emblem {border-radius:50%}
